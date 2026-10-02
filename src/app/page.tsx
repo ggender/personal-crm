@@ -13,6 +13,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
   const query = typeof params.q === "string" ? params.q.trim() : "";
   const addedId =
     typeof params.added === "string" ? parseContactId(params.added) : null;
+  const deleted = params.deleted === "1";
 
   const [contacts, total] = await Promise.all([
     listContacts(query),
@@ -43,6 +44,15 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
             Открыть карточку
           </Link>
           <ScrollIntoView targetId={`contact-${added.id}`} />
+        </div>
+      )}
+
+      {deleted && (
+        <div
+          role="status"
+          className="rounded-lg border bg-background px-4 py-3 text-sm"
+        >
+          Контакт удалён.
         </div>
       )}
 

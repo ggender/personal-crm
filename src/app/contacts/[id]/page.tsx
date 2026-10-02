@@ -1,9 +1,10 @@
-import { ArrowLeftIcon, PencilIcon } from "lucide-react";
+import { ArrowLeftIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addNote } from "@/app/actions";
+import { addNote, deleteNote } from "@/app/actions";
+import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { NoteForm } from "@/components/note-form";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -118,12 +119,27 @@ export default async function ContactPage({
               <ol className="grid gap-4">
                 {notes.map((note) => (
                   <li key={note.id} className="grid gap-1">
-                    <time
-                      dateTime={note.createdAt.toISOString()}
-                      className="text-xs text-muted-foreground"
-                    >
-                      {formatDateTime(note.createdAt)}
-                    </time>
+                    <div className="flex items-center justify-between gap-2">
+                      <time
+                        dateTime={note.createdAt.toISOString()}
+                        className="text-xs text-muted-foreground"
+                      >
+                        {formatDateTime(note.createdAt)}
+                      </time>
+                      <ConfirmDeleteButton
+                        action={deleteNote.bind(null, contact.id, note.id)}
+                        title="Удалить заметку?"
+                        description={`Заметка от ${formatDateTime(note.createdAt)} удалится навсегда, вернуть её не получится.`}
+                        confirmLabel="Удалить заметку"
+                        trigger={<Trash2Icon />}
+                        triggerProps={{
+                          variant: "ghost",
+                          size: "icon-sm",
+                          "aria-label": "Удалить заметку",
+                          className: "text-muted-foreground hover:text-destructive",
+                        }}
+                      />
+                    </div>
                     <p className="whitespace-pre-wrap">{note.body}</p>
                   </li>
                 ))}

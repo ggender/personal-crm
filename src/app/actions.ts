@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
@@ -24,7 +24,7 @@ export type NoteFormState = {
 
 const MAX_NOTE_LENGTH = 10_000;
 
-function assertContactId(id: unknown): asserts id is number {
+function assertId(id: unknown): asserts id is number {
   if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) {
     notFound();
   }
@@ -53,7 +53,7 @@ export async function updateContact(
   _previous: ContactFormState,
   formData: FormData,
 ): Promise<ContactFormState> {
-  assertContactId(id);
+  assertId(id);
   const parsed = parseContactForm(formData);
   if (!parsed.ok) {
     return { values: parsed.values, errors: parsed.errors };
@@ -78,7 +78,7 @@ export async function addNote(
   _previous: NoteFormState,
   formData: FormData,
 ): Promise<NoteFormState> {
-  assertContactId(contactId);
+  assertId(contactId);
   const body = String(formData.get("body") ?? "").trim();
   if (!body) {
     return { error: "Напишите текст заметки" };
@@ -106,4 +106,23 @@ export async function addNote(
 
   revalidatePath(`/contacts/${contactId}`);
   return {};
+}
+
+// Deletes the contact together with its notes (ON DELETE CASCADE).
+export async function deleteContact(id: number): Promise<void> {
+  assertId(id);
+  await db.delete(contacts).where(eq(contacts.id, id));
+
+  revalidatePath("/");
+  redirect("/?deleted=1");
+}
+
+export async function deleteNote(contactId: number, noteId: number): Promise<void> {
+  assertId(contactId);
+  assertId(noteId);
+  await db
+    .delete(notes)
+    .where(and(eq(notes.id, noteId), eq(notes.contactId, contactId)));
+
+  revalidatePath(`/contacts/${contactId}`);
 }
