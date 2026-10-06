@@ -38,8 +38,12 @@ else
   # Log in with a throwaway config so the registry token is never left on disk.
   docker_config="$(mktemp -d)"
   trap 'rm -rf "$docker_config"' EXIT
-  if [[ -n "$REGISTRY_USER" ]]; then
-    DOCKER_CONFIG="$docker_config" docker login "${REPO%%/*}" -u "$REGISTRY_USER" --password-stdin >/dev/null
+  # Login output is shown only on failure: on success docker warns about that temporary file.
+  if [[ -n "$REGISTRY_USER" ]] &&
+    ! login_output="$(DOCKER_CONFIG="$docker_config" docker login "${REPO%%/*}" \
+      -u "$REGISTRY_USER" --password-stdin 2>&1)"; then
+    echo "$login_output" >&2
+    exit 1
   fi
   DOCKER_CONFIG="$docker_config" docker pull --quiet "$IMAGE"
 fi
@@ -48,7 +52,7 @@ fi
 export APP_IMAGE="$IMAGE"
 
 step "Starting the database"
-compose up -d --wait db
+compose up -d --wait --quiet-pull db
 
 step "Applying migrations (one-off container)"
 compose run --rm --no-deps -T migrate
