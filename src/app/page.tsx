@@ -1,4 +1,4 @@
-import { CircleCheck, Plus, UserPlus } from "lucide-react";
+import { CircleCheck, Plus, Trash2, UserPlus } from "lucide-react";
 import Link from "next/link";
 
 import { ContactAvatar } from "@/components/contact-avatar";
@@ -26,9 +26,10 @@ function groupByLetter(items: ContactListItem[]) {
 }
 
 export default async function ContactsPage({ searchParams }: PageProps<"/">) {
-  const { q, added } = await searchParams;
+  const { q, added, deleted } = await searchParams;
   const query = typeof q === "string" ? q.trim() : "";
   const addedId = typeof added === "string" ? Number(added) : null;
+  const deletedName = typeof deleted === "string" ? deleted : null;
 
   const [items, total] = await Promise.all([listContacts(query), countContacts()]);
   const addedContact = addedId ? items.find((item) => item.id === addedId) : undefined;
@@ -70,6 +71,17 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
               Открыть
             </Link>
             <ScrollIntoView targetId={`contact-${addedContact.id}`} />
+          </div>
+        )}
+        {deletedName && (
+          <div
+            role="status"
+            className="bg-muted/60 mt-3 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm"
+          >
+            <Trash2 className="text-muted-foreground size-5 shrink-0" />
+            <p className="min-w-0 flex-1 break-words">
+              Контакт <strong>{deletedName}</strong> удалён.
+            </p>
           </div>
         )}
       </header>

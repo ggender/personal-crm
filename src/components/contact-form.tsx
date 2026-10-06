@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
-import { createContactAction, type ContactFormState } from "@/app/actions";
+import type { ContactFormState } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,10 +53,23 @@ function Field({ name, label, hint, state, children }: FieldProps) {
   );
 }
 
-export function ContactForm({ defaultName }: { defaultName?: string }) {
-  const [state, formAction, pending] = useActionState(createContactAction, {
-    values: { name: defaultName ?? "" },
-  });
+type ContactFormProps = {
+  action: (state: ContactFormState, formData: FormData) => Promise<ContactFormState>;
+  initialValues?: Partial<Record<ContactField, string>>;
+  submitLabel: string;
+  cancelHref: string;
+  /** New contacts can start with a note; existing ones edit notes on their page. */
+  withFirstNote?: boolean;
+};
+
+export function ContactForm({
+  action,
+  initialValues = {},
+  submitLabel,
+  cancelHref,
+  withFirstNote = false,
+}: ContactFormProps) {
+  const [state, formAction, pending] = useActionState(action, { values: initialValues });
 
   return (
     <form action={formAction} className="grid gap-5" noValidate>
@@ -110,14 +123,16 @@ export function ContactForm({ defaultName }: { defaultName?: string }) {
           )}
         </Field>
       </div>
-      <Field
-        name="firstNote"
-        label="О чём договорились"
-        hint="Сохранится первой заметкой в карточке контакта"
-        state={state}
-      >
-        {(props) => <Textarea {...props} maxLength={5000} rows={3} />}
-      </Field>
+      {withFirstNote && (
+        <Field
+          name="firstNote"
+          label="О чём договорились"
+          hint="Сохранится первой заметкой в карточке контакта"
+          state={state}
+        >
+          {(props) => <Textarea {...props} maxLength={5000} rows={3} />}
+        </Field>
+      )}
 
       {state.message && (
         <p role="alert" className="text-destructive text-sm">
@@ -127,10 +142,10 @@ export function ContactForm({ defaultName }: { defaultName?: string }) {
 
       <div className="flex flex-wrap gap-3">
         <Button type="submit" size="lg" disabled={pending}>
-          {pending ? "Сохраняю…" : "Сохранить контакт"}
+          {pending ? "Сохраняю…" : submitLabel}
         </Button>
         <Button asChild variant="ghost" size="lg">
-          <Link href="/">Отмена</Link>
+          <Link href={cancelHref}>Отмена</Link>
         </Button>
       </div>
     </form>

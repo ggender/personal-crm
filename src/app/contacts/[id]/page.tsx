@@ -1,18 +1,18 @@
-import { ArrowLeft, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Mail, Pencil, Phone } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addNoteAction } from "@/app/actions";
+import { addNoteAction, deleteNoteAction, updateNoteAction } from "@/app/actions";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { NoteForm } from "@/components/note-form";
+import { NoteItem } from "@/components/note-item";
+import { Button } from "@/components/ui/button";
 import { getContact, listNotes } from "@/lib/contacts";
 import { formatDate, formatDateTime, plural } from "@/lib/format";
+import { parseId } from "@/lib/validation";
 
-function parseId(raw: string) {
-  const id = Number(raw);
-  return Number.isSafeInteger(id) && id > 0 ? id : null;
-}
+const NOTE_WORDS: [string, string, string] = ["заметка", "заметки", "заметок"];
 
 export async function generateMetadata({ params }: PageProps<"/contacts/[id]">): Promise<Metadata> {
   const id = parseId((await params).id);
@@ -68,10 +68,16 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
 
       <header className="mb-6 flex items-center gap-4">
         <ContactAvatar id={contact.id} name={contact.name} className="size-16 text-xl" />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold tracking-tight break-words">{contact.name}</h1>
           {contact.about && <p className="text-muted-foreground">{contact.about}</p>}
         </div>
+        <Button asChild variant="outline" className="shrink-0">
+          <Link href={`/contacts/${contact.id}/edit`}>
+            <Pencil />
+            Изменить
+          </Link>
+        </Button>
       </header>
 
       <dl className="bg-card mb-10 grid gap-4 rounded-xl border p-5 sm:grid-cols-[10rem_1fr] sm:gap-x-6 sm:gap-y-3">
@@ -89,7 +95,7 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
             Заметки
           </h2>
           <span className="text-muted-foreground text-sm">
-            {notes.length > 0 ? plural(notes.length, ["заметка", "заметки", "заметок"]) : null}
+            {notes.length > 0 ? plural(notes.length, NOTE_WORDS) : null}
           </span>
         </div>
 
@@ -102,15 +108,20 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
         ) : (
           <ol className="mt-6 space-y-3">
             {notes.map((note) => (
-              <li key={note.id} className="bg-card rounded-xl border p-4">
-                <time
-                  dateTime={note.createdAt.toISOString()}
-                  className="text-muted-foreground mb-1 block text-xs"
-                >
-                  {formatDateTime(note.createdAt)}
-                </time>
-                <p className="break-words whitespace-pre-wrap">{note.body}</p>
-              </li>
+              <NoteItem
+                key={note.id}
+                body={note.body}
+                time={
+                  <time
+                    dateTime={note.createdAt.toISOString()}
+                    className="text-muted-foreground text-xs"
+                  >
+                    {formatDateTime(note.createdAt)}
+                  </time>
+                }
+                updateAction={updateNoteAction.bind(null, contact.id, note.id)}
+                deleteAction={deleteNoteAction.bind(null, contact.id, note.id)}
+              />
             ))}
           </ol>
         )}

@@ -33,6 +33,17 @@ export const contactInputSchema = z.object({
 export type ContactInput = z.infer<typeof contactInputSchema>;
 export type ContactField = keyof ContactInput;
 
+// Editing changes the contact's own fields; notes are edited separately.
+export const contactUpdateSchema = contactInputSchema.omit({ firstNote: true });
+
+export type ContactUpdate = z.infer<typeof contactUpdateSchema>;
+
 export const noteInputSchema = z.object({
   body: z.string().trim().min(1, "Напишите текст заметки").max(5000, "Не длиннее 5000 символов"),
 });
+
+/** Parses a route id like "42"; returns null for anything that is not a positive integer. */
+export function parseId(raw: string) {
+  const id = Number(raw);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}

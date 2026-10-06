@@ -2,6 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { createContactAction } from "@/app/actions";
 import { ContactForm } from "@/components/contact-form";
 
 export const metadata: Metadata = { title: "Новый контакт" };
@@ -19,7 +20,13 @@ export default async function NewContactPage({ searchParams }: PageProps<"/conta
         Все контакты
       </Link>
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Новый контакт</h1>
-      <ContactForm defaultName={typeof name === "string" ? name : undefined} />
+      <ContactForm
+        action={createContactAction}
+        initialValues={{ name: typeof name === "string" ? name : "" }}
+        submitLabel="Сохранить контакт"
+        cancelHref="/"
+        withFirstNote
+      />
     </main>
   );
 }
