@@ -1,0 +1,61 @@
+# Production stack on the server (/srv/personal-crm). Use it only through deploy.sh or compose.sh:
+# they pass the project name (-p prod), .env (secrets) and release.env (current image tag).
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+x-app: &app
+  image: ${APP_IMAGE:?APP_IMAGE is not set - run through deploy.sh or compose.sh}
+  environment:
+    DATABASE_URL: postgres://crm:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set in .env}@db:5432/crm
+  depends_on:
+    db:
+      condition: service_healthy
+  logging: *logging
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crm
+      POSTGRES_DB: crm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set in .env}
+    # No ports: the database is reachable only from the containers of this stack.
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+      start_interval: 1s
+    logging: *logging
+
+  # One-off container: applies migrations and exits. deploy.sh runs it before starting a new image.
+  migrate:
+    <<: *app
+    command: ["node", "scripts/migrate.ts"]
+    restart: "no"
+    profiles: [migrate]
+
+  app:
+    <<: *app
+    restart: unless-stopped
+    ports:
+      # Localhost only: the app is reached from outside through nginx on this server.
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+      start_interval: 1s
+
+volumes:
+  pgdata:

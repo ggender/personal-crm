@@ -1,0 +1,14 @@
+# Keep the Docker build context small and free of secrets.
+.git
+.github
+.next
+node_modules
+.env*
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+coverage
+deploy
+specs
+Dockerfile
+.dockerignore

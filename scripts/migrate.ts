@@ -1,10 +1,9 @@
 // Applies pending SQL migrations from ./drizzle to the database in DATABASE_URL.
-import { loadEnvConfig } from "@next/env";
+// Locally `pnpm db:migrate` loads DATABASE_URL from .env; in production the Docker image
+// runs this file with plain Node (`node scripts/migrate.ts`) and gets the variable from compose.
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
-
-loadEnvConfig(process.cwd());
 
 async function main() {
   const url = process.env.DATABASE_URL;
