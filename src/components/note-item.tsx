@@ -23,7 +23,7 @@ export function NoteItem({ body, time, updateAction, deleteAction }: NoteItemPro
   const [editing, setEditing] = useState(false);
 
   return (
-    <li className="bg-card rounded-xl border p-4">
+    <li className="rounded-14 bg-note px-4 pt-2.5 pb-4">
       <div className="mb-1 flex min-h-7 items-center justify-between gap-2">
         {time}
         {!editing && (
@@ -31,7 +31,7 @@ export function NoteItem({ body, time, updateAction, deleteAction }: NoteItemPro
             <Button
               variant="ghost"
               size="icon-sm"
-              className="text-muted-foreground"
+              className="text-subtle hover:text-ink"
               aria-label="Изменить заметку"
               onClick={() => setEditing(true)}
             >
@@ -45,7 +45,7 @@ export function NoteItem({ body, time, updateAction, deleteAction }: NoteItemPro
               <Button
                 variant="ghost"
                 size="icon-sm"
-                className="text-muted-foreground"
+                className="text-subtle hover:text-ink"
                 aria-label="Удалить заметку"
               >
                 <Trash2 />
@@ -57,7 +57,7 @@ export function NoteItem({ body, time, updateAction, deleteAction }: NoteItemPro
       {editing ? (
         <NoteEditForm body={body} action={updateAction} onDone={() => setEditing(false)} />
       ) : (
-        <p className="break-words whitespace-pre-wrap">{body}</p>
+        <p className="text-memo-lg break-words whitespace-pre-wrap text-note-text">{body}</p>
       )}
     </li>
   );
@@ -105,7 +105,7 @@ function NoteEditForm({
         defaultValue={state.body ?? body}
         aria-invalid={state.error ? true : undefined}
         aria-describedby={state.error ? `${id}-error` : undefined}
-        className="min-h-24 text-base"
+        className="min-h-24"
         onKeyDown={(event) => {
           // Same shortcut as for a new note; Escape leaves without saving.
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -125,7 +125,7 @@ function NoteEditForm({
           Отмена
         </Button>
         {state.error && (
-          <span id={`${id}-error`} role="alert" className="text-destructive text-sm">
+          <span id={`${id}-error`} role="alert" className="text-14 text-destructive">
             {state.error}
           </span>
         )}

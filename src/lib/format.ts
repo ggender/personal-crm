@@ -32,6 +32,3 @@ export function plural(value: number, [one, few, many]: [string, string, string]
   const word = form === "one" ? one : form === "few" ? few : many;
   return `${value.toLocaleString("ru-RU")} ${word}`;
 }
-
-/** Stable soft hue per contact, so avatars are easy to tell apart. */
-export const avatarHue = (id: number) => (id * 137) % 360;

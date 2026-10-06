@@ -1,8 +1,7 @@
-import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { createContactAction } from "@/app/actions";
+import { BackLink } from "@/components/back-link";
 import { ContactForm } from "@/components/contact-form";
 
 export const metadata: Metadata = { title: "Новый контакт" };
@@ -11,15 +10,9 @@ export default async function NewContactPage({ searchParams }: PageProps<"/conta
   const { name } = await searchParams;
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
-      <Link
-        href="/"
-        className="text-muted-foreground hover:text-foreground mb-6 inline-flex items-center gap-1.5 text-sm"
-      >
-        <ArrowLeft className="size-4" />
-        Все контакты
-      </Link>
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Новый контакт</h1>
+    <main className="page-container pt-4 pb-16">
+      <BackLink href="/">Все контакты</BackLink>
+      <h1 className="mt-5 mb-6 font-serif text-26 font-medium sm:text-h2">Новый контакт</h1>
       <ContactForm
         action={createContactAction}
         initialValues={{ name: typeof name === "string" ? name : "" }}

@@ -33,7 +33,7 @@ export function ContactSearch({ defaultValue }: { defaultValue: string }) {
         search(new FormData(event.currentTarget).get("q")?.toString() ?? "");
       }}
     >
-      <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+      <Search className="pointer-events-none absolute top-1/2 left-4 size-4.5 -translate-y-1/2 text-accent" />
       <Input
         type="search"
         name="q"
@@ -41,7 +41,7 @@ export function ContactSearch({ defaultValue }: { defaultValue: string }) {
         placeholder="Найти по имени"
         aria-label="Найти контакт по имени"
         autoComplete="off"
-        className="h-11 pr-10 pl-9 text-base"
+        className="h-12 rounded-14 border-line pr-11 pl-11"
         onChange={(event) => {
           const value = event.target.value;
           window.clearTimeout(timer.current);
@@ -51,7 +51,7 @@ export function ContactSearch({ defaultValue }: { defaultValue: string }) {
       {isPending && (
         <LoaderCircle
           aria-label="Ищу…"
-          className="text-muted-foreground absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin"
+          className="absolute top-1/2 right-4 size-4 -translate-y-1/2 animate-spin text-subtle"
         />
       )}
     </form>

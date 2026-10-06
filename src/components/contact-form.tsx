@@ -39,12 +39,12 @@ function Field({ name, label, hint, state, children }: FieldProps) {
         "aria-describedby": describedBy,
       })}
       {error ? (
-        <p id={`${id}-error`} className="text-destructive text-sm">
+        <p id={`${id}-error`} className="text-14 text-destructive">
           {error}
         </p>
       ) : (
         hint && (
-          <p id={`${id}-hint`} className="text-muted-foreground text-sm">
+          <p id={`${id}-hint`} className="text-14 text-muted">
             {hint}
           </p>
         )
@@ -135,12 +135,12 @@ export function ContactForm({
       )}
 
       {state.message && (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-14 text-destructive">
           {state.message}
         </p>
       )}
 
-      <div className="flex flex-wrap gap-3">
+      <div className="mt-1 flex flex-wrap gap-3">
         <Button type="submit" size="lg" disabled={pending}>
           {pending ? "Сохраняю…" : submitLabel}
         </Button>

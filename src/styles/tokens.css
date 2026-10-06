@@ -1,0 +1,127 @@
+/*
+ * Design tokens shared with the landing: the single source of colors, fonts, type sizes, radii and shadows.
+ * This file is a copy of src/styles/tokens.css from the landing repository - keep them in sync.
+ * Spacing uses the default Tailwind scale (1 step = 4px, fractional steps allowed).
+ */
+@theme {
+  /* Colors */
+  --color-bg: #f5efe6;
+  --color-strip: #efe6da;
+  --color-surface: #fffaf3;
+  --color-surface-muted: #fbf5ec;
+  --color-note: #fbeee4;
+  --color-ink: #2a211b;
+  --color-muted: #6d5f53;
+  --color-subtle: #8a7a6b;
+  --color-faint: #9a8a7b;
+  --color-note-text: #4b3a2e;
+  --color-accent: #c2562f;
+  --color-accent-text: #b4502c;
+  --color-accent-on-dark: #e88a63;
+  --color-line: #e6dccd;
+  --color-line-strong: #e0cdb6;
+  --color-line-soft: #ece2d4;
+  --color-glow: #e27850;
+
+  /* Fonts */
+  --font-serif: "Literata", Georgia, serif;
+  --font-sans: "Onest", system-ui, sans-serif;
+
+  /* Plain type sizes (line-height: normal) */
+  --text-11: 11px;
+  --text-11--line-height: normal;
+  --text-12: 12px;
+  --text-12--line-height: normal;
+  --text-13: 13px;
+  --text-13--line-height: normal;
+  --text-14: 14px;
+  --text-14--line-height: normal;
+  --text-15: 15px;
+  --text-15--line-height: normal;
+  --text-16: 16px;
+  --text-16--line-height: normal;
+  --text-17: 17px;
+  --text-17--line-height: normal;
+  --text-18: 18px;
+  --text-18--line-height: normal;
+  --text-20: 20px;
+  --text-20--line-height: normal;
+  --text-24: 24px;
+  --text-24--line-height: normal;
+  --text-26: 26px;
+  --text-26--line-height: normal;
+
+  /* Text styles: mobile / desktop (-lg) */
+  --text-h1: 40px;
+  --text-h1--line-height: 1.06;
+  --text-h1--letter-spacing: -0.03em;
+  --text-h1-lg: 66px;
+  --text-h1-lg--line-height: 1.03;
+  --text-h1-lg--letter-spacing: -0.03em;
+
+  --text-h2: 34px;
+  --text-h2--line-height: 1.1;
+  --text-h2--letter-spacing: -0.03em;
+  --text-h2-lg: 56px;
+  --text-h2-lg--line-height: 1.05;
+  --text-h2-lg--letter-spacing: -0.03em;
+
+  --text-lead: 16px;
+  --text-lead--line-height: 1.6;
+  --text-lead-lg: 19px;
+  --text-lead-lg--line-height: 1.6;
+
+  --text-label: 13px;
+  --text-label--line-height: normal;
+  --text-label--letter-spacing: 0.08em;
+  --text-label-lg: 14px;
+  --text-label-lg--line-height: normal;
+  --text-label-lg--letter-spacing: 0.08em;
+
+  --text-problem: 19px;
+  --text-problem--line-height: 1.35;
+  --text-problem-lg: 24px;
+  --text-problem-lg--line-height: 1.3;
+
+  --text-num: 26px;
+  --text-num--line-height: 1;
+  --text-num-lg: 36px;
+  --text-num-lg--line-height: 1;
+
+  --text-step: 22px;
+  --text-step--line-height: 1.3;
+  --text-step-lg: 23px;
+  --text-step-lg--line-height: 1.3;
+
+  --text-benefit: 26px;
+  --text-benefit--line-height: 1.25;
+  --text-benefit-lg: 32px;
+  --text-benefit-lg--line-height: 1.2;
+
+  --text-memo: 14px;
+  --text-memo--line-height: 1.5;
+  --text-memo-lg: 16px;
+  --text-memo-lg--line-height: 1.55;
+
+  /* Widths */
+  --container-page: 1200px;
+  --container-page-md: 640px;
+  --container-lead: 470px;
+  --container-h2: 760px;
+  --container-step: 300px;
+
+  /* Radii */
+  --radius-3: 3px;
+  --radius-4: 4px;
+  --radius-10: 10px;
+  --radius-11: 11px;
+  --radius-12: 12px;
+  --radius-14: 14px;
+  --radius-15: 15px;
+  --radius-16: 16px;
+  --radius-20: 20px;
+
+  /* Shadows */
+  --shadow-card: 0 20px 40px -24px rgba(120, 70, 30, 0.45);
+  --shadow-card-lg: 0 30px 60px -30px rgba(120, 70, 30, 0.45);
+}

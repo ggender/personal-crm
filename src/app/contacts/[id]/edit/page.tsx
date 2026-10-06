@@ -1,9 +1,9 @@
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { deleteContactAction, updateContactAction } from "@/app/actions";
+import { BackLink } from "@/components/back-link";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { ContactForm } from "@/components/contact-form";
 import { Button } from "@/components/ui/button";
@@ -26,14 +26,9 @@ export default async function EditContactPage({ params }: PageProps<"/contacts/[
   if (!contact) notFound();
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
-      <Link
-        href={`/contacts/${contact.id}`}
-        className="text-muted-foreground hover:text-foreground mb-6 inline-flex items-center gap-1.5 text-sm"
-      >
-        <ArrowLeft className="size-4" />К карточке
-      </Link>
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Изменить контакт</h1>
+    <main className="page-container pt-4 pb-16">
+      <BackLink href={`/contacts/${contact.id}`}>К карточке</BackLink>
+      <h1 className="mt-5 mb-6 font-serif text-26 font-medium sm:text-h2">Изменить контакт</h1>
       <ContactForm
         action={updateContactAction.bind(null, contact.id)}
         initialValues={{
@@ -48,7 +43,7 @@ export default async function EditContactPage({ params }: PageProps<"/contacts/[
       />
 
       {/* Rare and irreversible, so it lives here rather than on the contact page. */}
-      <div className="mt-10 border-t pt-6">
+      <div className="mt-10 border-t border-line pt-6">
         <ConfirmDelete
           title={`Удалить «${contact.name}»?`}
           description={
@@ -61,7 +56,7 @@ export default async function EditContactPage({ params }: PageProps<"/contacts/[
           <Button
             variant="ghost"
             size="lg"
-            className="text-destructive hover:text-destructive -ml-2.5"
+            className="-ml-2.5 text-destructive hover:text-destructive"
           >
             <Trash2 />
             Удалить контакт

@@ -1,9 +1,10 @@
-import { ArrowLeft, Mail, Pencil, Phone } from "lucide-react";
+import { Mail, Pencil, Phone } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { addNoteAction, deleteNoteAction, updateNoteAction } from "@/app/actions";
+import { BackLink } from "@/components/back-link";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { NoteForm } from "@/components/note-form";
 import { NoteItem } from "@/components/note-item";
@@ -33,9 +34,9 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
       value: (
         <a
           href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`}
-          className="inline-flex items-center gap-2 hover:underline"
+          className="inline-flex items-center gap-2 underline-offset-4 hover:underline"
         >
-          <Phone className="text-muted-foreground size-4" />
+          <Phone className="size-4 text-subtle" />
           <span className="tabular-nums">{contact.phone}</span>
         </a>
       ),
@@ -45,9 +46,9 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
       value: (
         <a
           href={`mailto:${contact.email}`}
-          className="inline-flex items-center gap-2 break-all hover:underline"
+          className="inline-flex items-center gap-2 break-all underline-offset-4 hover:underline"
         >
-          <Mail className="text-muted-foreground size-4 shrink-0" />
+          <Mail className="size-4 shrink-0 text-subtle" />
           {contact.email}
         </a>
       ),
@@ -57,44 +58,45 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
   ].filter(Boolean) as { label: string; value: React.ReactNode }[];
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
-      <Link
-        href="/"
-        className="text-muted-foreground hover:text-foreground mb-6 inline-flex items-center gap-1.5 text-sm"
-      >
-        <ArrowLeft className="size-4" />
-        Все контакты
-      </Link>
-
-      <header className="mb-6 flex items-center gap-4">
-        <ContactAvatar id={contact.id} name={contact.name} className="size-16 text-xl" />
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight break-words">{contact.name}</h1>
-          {contact.about && <p className="text-muted-foreground">{contact.about}</p>}
-        </div>
-        <Button asChild variant="outline" className="shrink-0">
+    <main className="page-container pt-4 pb-16">
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <BackLink href="/">Все контакты</BackLink>
+        <Button asChild variant="outline" size="sm">
           <Link href={`/contacts/${contact.id}/edit`}>
             <Pencil />
             Изменить
           </Link>
         </Button>
+      </div>
+
+      <header className="mb-6 flex items-center gap-4">
+        <ContactAvatar name={contact.name} className="size-14 text-20 sm:size-16 sm:text-24" />
+        <div className="min-w-0 flex-1">
+          <h1 className="font-serif text-26 leading-tight font-medium text-balance break-words sm:text-h2">
+            {contact.name}
+          </h1>
+          {contact.about && <p className="mt-1 text-16 text-muted">{contact.about}</p>}
+        </div>
       </header>
 
-      <dl className="bg-card mb-10 grid gap-4 rounded-xl border p-5 sm:grid-cols-[10rem_1fr] sm:gap-x-6 sm:gap-y-3">
+      <dl className="mb-10 rounded-20 border border-line-strong bg-surface px-5 shadow-card sm:px-6.5">
         {details.map((item) => (
-          <div key={item.label} className="contents">
-            <dt className="text-muted-foreground text-sm sm:pt-0.5">{item.label}</dt>
-            <dd className="-mt-3 whitespace-pre-wrap sm:mt-0">{item.value}</dd>
+          <div
+            key={item.label}
+            className="grid gap-1 border-dashed border-line-strong py-3.5 not-first:border-t sm:grid-cols-[10rem_1fr] sm:gap-6 sm:py-4"
+          >
+            <dt className="text-14 text-subtle sm:pt-0.5">{item.label}</dt>
+            <dd className="text-16 whitespace-pre-wrap">{item.value}</dd>
           </div>
         ))}
       </dl>
 
       <section aria-labelledby="notes-heading">
         <div className="mb-3 flex items-baseline justify-between gap-4">
-          <h2 id="notes-heading" className="text-lg font-semibold">
+          <h2 id="notes-heading" className="text-label font-medium text-accent-text uppercase">
             Заметки
           </h2>
-          <span className="text-muted-foreground text-sm">
+          <span className="text-14 text-subtle">
             {notes.length > 0 ? plural(notes.length, NOTE_WORDS) : null}
           </span>
         </div>
@@ -102,7 +104,7 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
         <NoteForm action={addNoteAction.bind(null, contact.id)} />
 
         {notes.length === 0 ? (
-          <p className="text-muted-foreground mt-6 text-sm">
+          <p className="mt-6 text-15 text-muted">
             Заметок пока нет. Запишите, о чём говорили и о чём договорились.
           </p>
         ) : (
@@ -114,7 +116,7 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
                 time={
                   <time
                     dateTime={note.createdAt.toISOString()}
-                    className="text-muted-foreground text-xs"
+                    className="text-13 text-accent-text"
                   >
                     {formatDateTime(note.createdAt)}
                   </time>

@@ -55,7 +55,7 @@ export function ConfirmDelete({ title, description, action, children }: ConfirmD
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         {error && (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-14 text-destructive">
             {error}
           </p>
         )}

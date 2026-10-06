@@ -1,15 +1,17 @@
 export default function Loading() {
   return (
-    <main className="mx-auto w-full max-w-2xl animate-pulse px-4 py-6 sm:px-6" aria-busy>
-      <div className="bg-muted mb-6 h-4 w-28 rounded" />
+    <main className="page-container animate-pulse pt-4 pb-16" aria-busy>
+      <div className="mb-5 flex h-8 items-center">
+        <div className="h-4 w-28 rounded-4 bg-strip" />
+      </div>
       <div className="mb-6 flex items-center gap-4">
-        <div className="bg-muted size-16 rounded-full" />
+        <div className="size-14 rounded-full bg-strip sm:size-16" />
         <div className="grid gap-2">
-          <div className="bg-muted h-6 w-48 rounded" />
-          <div className="bg-muted h-4 w-64 rounded" />
+          <div className="h-8 w-48 rounded-10 bg-strip" />
+          <div className="h-4 w-64 rounded-4 bg-strip" />
         </div>
       </div>
-      <div className="bg-muted h-36 rounded-xl" />
+      <div className="h-36 rounded-20 bg-strip" />
     </main>
   );
 }

@@ -41,7 +41,7 @@ export function NoteForm({
         placeholder="Что обсудили, о чём договорились…"
         aria-invalid={state.error ? true : undefined}
         aria-describedby={state.error ? "note-error" : undefined}
-        className="min-h-24 text-base"
+        className="min-h-24"
         onKeyDown={(event) => {
           // Cmd/Ctrl + Enter saves the note without reaching for the mouse.
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -54,21 +54,21 @@ export function NoteForm({
         <Button type="submit" disabled={pending}>
           {pending ? "Сохраняю…" : "Добавить заметку"}
         </Button>
-        <span aria-live="polite" className="text-sm">
+        <span aria-live="polite" className="text-14">
           {state.error ? (
             <span id="note-error" className="text-destructive">
               {state.error}
             </span>
           ) : (
             showSaved && (
-              <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+              <span className="inline-flex items-center gap-1.5 text-accent-text">
                 <CircleCheck className="size-4" />
                 Заметка сохранена
               </span>
             )
           )}
         </span>
-        <span className="text-muted-foreground ml-auto hidden text-xs sm:inline">
+        <span className="ml-auto hidden text-13 text-subtle sm:inline">
           ⌘/Ctrl + Enter — сохранить
         </span>
       </div>
