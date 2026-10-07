@@ -1,0 +1,52 @@
+schema: spec-driven
+
+context: |
+  Language: Russian
+  All artifacts must be written in Russian.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  Project: personal CRM - contacts of people the owner knows personally:
+  who they are, how they met, phone and email, notes on what was agreed.
+  Product idea, main scenario, constraints and out-of-scope list:
+  specs/01-продуктовая-идея.md - read it before proposing a change.
+  Out of scope: login and registration, notifications, offline mode.
+
+  Owner: not a developer, makes all product decisions. Anything not covered
+  by the product idea, existing specs or the owner's request is an open
+  question - ask, do not invent. Write so a non-developer can follow.
+
+  Stack: Next.js (App Router), TypeScript, React, Tailwind CSS, shadcn/ui.
+  PostgreSQL with Drizzle: schema in src/db/schema.ts, migrations in drizzle/
+  (pnpm db:generate). The browser never talks to the database: all data
+  access goes through the Next.js server (src/lib/contacts.ts,
+  src/app/actions.ts). Colors, fonts and spacing only via design tokens
+  (src/styles/tokens.css). Package manager: pnpm.
+  A new library or service is a decision for the owner.
+
+  Code is in English: identifiers, file names, DB tables and columns,
+  comments, error and log messages. Only user-facing UI copy is in Russian.
+
+  Deploy: merge to main -> image -> migrations run as a separate one-off
+  container before the new image starts -> smoke check /health.
+
+rules:
+  proposal:
+    - List product decisions the agent made on its own and open questions for the owner
+  specs:
+    - Every scenario must be checkable by hand in the browser by the owner
+  design:
+    - If the database changes - describe the migrations, what happens to existing data, and how to roll back
+  tasks:
+    - Final task - manual check of every spec scenario in the browser
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
