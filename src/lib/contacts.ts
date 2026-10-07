@@ -38,6 +38,15 @@ export async function getContact(id: number) {
   return contact ?? null;
 }
 
+export async function countNotes(contactId: number) {
+  await connection();
+  const [{ value }] = await getDb()
+    .select({ value: count() })
+    .from(notes)
+    .where(eq(notes.contactId, contactId));
+  return value;
+}
+
 export async function listNotes(contactId: number) {
   await connection();
   return getDb()
@@ -79,6 +88,18 @@ export async function updateContact(id: number, fields: ContactUpdate) {
     .where(eq(contacts.id, id))
     .returning({ id: contacts.id });
   return updated.length > 0;
+}
+
+/**
+ * Deletes the contact together with its notes (the foreign key cascades).
+ * Returns false when the contact does not exist.
+ */
+export async function deleteContact(id: number) {
+  const deleted = await getDb()
+    .delete(contacts)
+    .where(eq(contacts.id, id))
+    .returning({ id: contacts.id });
+  return deleted.length > 0;
 }
 
 /** Returns false when the note does not exist or belongs to another contact. */
