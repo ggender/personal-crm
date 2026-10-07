@@ -4,12 +4,24 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { z } from "zod";
 
-import { addNote, createContact, deleteContact, updateContact, updateNote } from "@/lib/contacts";
 import {
+  addNote,
+  createContact,
+  deleteContact,
+  markContacted,
+  setContactFrequency,
+  undoContacted,
+  updateContact,
+  updateNote,
+} from "@/lib/contacts";
+import type { ContactFrequency } from "@/lib/keep-in-touch";
+import {
+  contactFrequencySchema,
   contactInputSchema,
   type ContactField,
   contactUpdateSchema,
   noteInputSchema,
+  undoContactedSchema,
 } from "@/lib/validation";
 
 export type ContactFormState = {
@@ -28,10 +40,20 @@ export type DeleteResult = {
   error?: string;
 };
 
+export type SaveResult = {
+  error?: string;
+};
+
+/** On success: what undo needs, as ISO strings. */
+export type MarkContactedResult = { previous: string | null; marked: string } | { error: string };
+
 const contactFields: ContactField[] = ["name", "about", "howWeMet", "phone", "email", "firstNote"];
 const contactUpdateFields: ContactField[] = ["name", "about", "howWeMet", "phone", "email"];
 
 const isValidId = (id: number) => Number.isSafeInteger(id) && id > 0;
+
+const NOT_FOUND = "Контакт не найден";
+const SAVE_FAILED = "Не удалось сохранить. Попробуйте ещё раз.";
 
 function readFields(formData: FormData, fields: ContactField[]) {
   return Object.fromEntries(
@@ -139,6 +161,8 @@ export async function addNoteAction(
     return { error: "Не удалось сохранить заметку. Попробуйте ещё раз.", body };
   }
 
+  // A new note restarts the keep-in-touch period, so the home page block changes too.
+  revalidatePath("/");
   revalidatePath(`/contacts/${contactId}`);
   return { savedAt: Date.now() };
 }
@@ -168,4 +192,69 @@ export async function updateNoteAction(
 
   revalidatePath(`/contacts/${contactId}`);
   return { savedAt: Date.now() };
+}
+
+export async function setContactFrequencyAction(
+  contactId: number,
+  frequency: ContactFrequency | null,
+): Promise<SaveResult> {
+  const parsed = contactFrequencySchema.safeParse(frequency);
+  if (!parsed.success) return { error: SAVE_FAILED };
+  if (!isValidId(contactId)) return { error: NOT_FOUND };
+
+  try {
+    const saved = await setContactFrequency(contactId, parsed.data);
+    if (!saved) return { error: NOT_FOUND };
+  } catch (error) {
+    console.error("Failed to set contact frequency", error);
+    return { error: SAVE_FAILED };
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/contacts/${contactId}`);
+  return {};
+}
+
+/*
+ * "Пообщались" and its undo do not revalidate: the home page would re-render at once and drop the
+ * row before "Отменить" could be pressed. The button refreshes the page itself (see ContactedButton).
+ */
+
+export async function markContactedAction(contactId: number): Promise<MarkContactedResult> {
+  if (!isValidId(contactId)) return { error: NOT_FOUND };
+
+  try {
+    const result = await markContacted(contactId);
+    if (!result) return { error: NOT_FOUND };
+    return {
+      previous: result.previous?.toISOString() ?? null,
+      marked: result.marked.toISOString(),
+    };
+  } catch (error) {
+    console.error("Failed to mark contact as contacted", error);
+    return { error: SAVE_FAILED };
+  }
+}
+
+export async function undoContactedAction(
+  contactId: number,
+  previous: string | null,
+  marked: string,
+): Promise<SaveResult> {
+  const parsed = undoContactedSchema.safeParse({ previous, marked });
+  if (!parsed.success) return { error: SAVE_FAILED };
+  if (!isValidId(contactId)) return { error: NOT_FOUND };
+
+  try {
+    // Nothing restored means a later press replaced this mark: it stays, and that is not an error.
+    await undoContacted(
+      contactId,
+      parsed.data.previous === null ? null : new Date(parsed.data.previous),
+      new Date(parsed.data.marked),
+    );
+  } catch (error) {
+    console.error("Failed to undo contacted mark", error);
+    return { error: SAVE_FAILED };
+  }
+  return {};
 }

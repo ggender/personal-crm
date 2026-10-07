@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CONTACT_FREQUENCIES } from "@/lib/keep-in-touch";
+
 // Empty optional fields are stored as NULL rather than as empty strings.
 const optionalText = (max: number) =>
   z
@@ -40,6 +42,15 @@ export type ContactUpdate = z.infer<typeof contactUpdateSchema>;
 
 export const noteInputSchema = z.object({
   body: z.string().trim().min(1, "Напишите текст заметки").max(5000, "Не длиннее 5000 символов"),
+});
+
+/** Keep in touch: null means "Не задано". */
+export const contactFrequencySchema = z.enum(CONTACT_FREQUENCIES).nullable();
+
+/** What the browser sends back to undo "Пообщались": the mark it set and the value before it. */
+export const undoContactedSchema = z.object({
+  marked: z.iso.datetime(),
+  previous: z.iso.datetime().nullable(),
 });
 
 /** Parses a route id like "42"; returns null for anything that is not a positive integer. */

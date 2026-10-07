@@ -4,3 +4,6 @@ src/components/ui
 specs
 CLAUDE.md
 AGENTS.md
+openspec
+.claude/commands/opsx
+.claude/skills/openspec-*

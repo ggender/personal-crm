@@ -1,15 +1,45 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { connection } from "next/server";
 
 import { getDb } from "@/db";
 import { contacts, notes, RU_COLLATION } from "@/db/schema";
+import { APP_TIME_ZONE, CONTACT_FREQUENCIES, type ContactFrequency } from "@/lib/keep-in-touch";
 import type { ContactInput, ContactUpdate } from "@/lib/validation";
 
 // Case- and "ё"-insensitive form used for name search.
 const normalizeForSearch = (value: string) => value.toLowerCase().replaceAll("ё", "е");
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
+const byName = sql`${contacts.name} collate ${sql.identifier(RU_COLLATION)}`;
+
+/*
+ * Keep in touch: one set of expressions for the home page block and the contact card.
+ * Last contact = the later of the newest note and the last "Пообщались", else the day the contact
+ * was added. Editing a note keeps its created_at, so it does not reset the due date.
+ * Days are Moscow calendar days; Postgres adds calendar months and clamps to the month's end
+ * (31 January + 1 month = 28 February). A contact is overdue from the day after the due date.
+ */
+const FREQUENCY_INTERVALS: Record<ContactFrequency, string> = {
+  weekly: "7 days",
+  monthly: "1 month",
+  quarterly: "3 months",
+  yearly: "1 year",
+};
+
+const lastNoteAt = sql`(select max(${notes.createdAt}) from ${notes} where ${notes.contactId} = ${contacts.id})`;
+const lastContactAt = sql`coalesce(greatest(${lastNoteAt}, ${contacts.lastContactedAt}), ${contacts.createdAt})`;
+const frequencyInterval = sql`case ${contacts.contactFrequency} ${sql.join(
+  CONTACT_FREQUENCIES.map(
+    (frequency) => sql`when ${frequency} then ${FREQUENCY_INTERVALS[frequency]}::interval`,
+  ),
+  sql` `,
+)} end`;
+// NULL when the frequency is not set.
+const dueDate = sql`((${lastContactAt} at time zone ${APP_TIME_ZONE})::date + ${frequencyInterval})::date`;
+const today = sql`(now() at time zone ${APP_TIME_ZONE})::date`;
+const overdueDays = sql<number | null>`(${today} - ${dueDate})`.mapWith(Number);
 
 export async function listContacts(query: string) {
   await connection();
@@ -23,7 +53,49 @@ export async function listContacts(query: string) {
     .select({ id: contacts.id, name: contacts.name, about: contacts.about, phone: contacts.phone })
     .from(contacts)
     .where(and(...conditions))
-    .orderBy(sql`${contacts.name} collate ${sql.identifier(RU_COLLATION)}`, asc(contacts.id));
+    .orderBy(byName, asc(contacts.id));
+}
+
+/** Contacts not reached for longer than their frequency: the most overdue first, then by name. */
+export async function listOverdueContacts() {
+  await connection();
+  return getDb()
+    .select({
+      id: contacts.id,
+      name: contacts.name,
+      frequency: sql<ContactFrequency>`${contacts.contactFrequency}`,
+      overdueDays: sql<number>`${overdueDays}`.mapWith(Number),
+    })
+    .from(contacts)
+    .where(and(isNotNull(contacts.contactFrequency), gt(overdueDays, 0)))
+    .orderBy(desc(overdueDays), byName, asc(contacts.id));
+}
+
+export type ContactTouchStatus =
+  | { frequency: null }
+  | {
+      frequency: ContactFrequency;
+      /** The last day to get in touch, "YYYY-MM-DD" (a text, so no time zone can shift the day). */
+      dueDate: string;
+      /** Days past the due date; zero or less means not overdue yet. */
+      overdueDays: number;
+    };
+
+/** Returns null when the contact does not exist. */
+export async function getContactTouchStatus(contactId: number): Promise<ContactTouchStatus | null> {
+  await connection();
+  const [row] = await getDb()
+    .select({
+      frequency: contacts.contactFrequency,
+      dueDate: sql<string | null>`to_char(${dueDate}, 'YYYY-MM-DD')`,
+      overdueDays,
+    })
+    .from(contacts)
+    .where(eq(contacts.id, contactId));
+  if (!row) return null;
+  if (!row.frequency || row.dueDate === null || row.overdueDays === null)
+    return { frequency: null };
+  return { frequency: row.frequency, dueDate: row.dueDate, overdueDays: row.overdueDays };
 }
 
 export async function countContacts() {
@@ -100,6 +172,53 @@ export async function deleteContact(id: number) {
     .where(eq(contacts.id, id))
     .returning({ id: contacts.id });
   return deleted.length > 0;
+}
+
+/** Returns false when the contact does not exist. */
+export async function setContactFrequency(contactId: number, frequency: ContactFrequency | null) {
+  const updated = await getDb()
+    .update(contacts)
+    .set({ contactFrequency: frequency, updatedAt: sql`now()` })
+    .where(eq(contacts.id, contactId))
+    .returning({ id: contacts.id });
+  return updated.length > 0;
+}
+
+/**
+ * "Пообщались": records a contact now, without a note. Leaves updated_at alone: the contact's
+ * data did not change. Returns the previous and the new mark for undo, or null when the contact
+ * does not exist.
+ */
+export async function markContacted(contactId: number) {
+  return getDb().transaction(async (tx) => {
+    const [current] = await tx
+      .select({ lastContactedAt: contacts.lastContactedAt })
+      .from(contacts)
+      .where(eq(contacts.id, contactId))
+      .for("update");
+    if (!current) return null;
+    // Millisecond precision, so the mark survives the round trip through a JS Date for undo.
+    const [{ marked }] = await tx
+      .update(contacts)
+      .set({ lastContactedAt: sql`date_trunc('milliseconds', now())` })
+      .where(eq(contacts.id, contactId))
+      .returning({ marked: contacts.lastContactedAt });
+    return { previous: current.lastContactedAt, marked: marked! };
+  });
+}
+
+/**
+ * Restores the mark that was there before "Пообщались", but only while the contact still has the
+ * mark that press set: a later press, e.g. in another tab, is not overwritten.
+ * Returns false when nothing was restored.
+ */
+export async function undoContacted(contactId: number, previous: Date | null, marked: Date) {
+  const updated = await getDb()
+    .update(contacts)
+    .set({ lastContactedAt: previous })
+    .where(and(eq(contacts.id, contactId), eq(contacts.lastContactedAt, marked)))
+    .returning({ id: contacts.id });
+  return updated.length > 0;
 }
 
 /** Returns false when the note does not exist or belongs to another contact. */

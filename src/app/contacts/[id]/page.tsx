@@ -1,16 +1,30 @@
-import { Mail, Pencil, Phone } from "lucide-react";
+import { Calendar, Clock, Mail, Pencil, Phone } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addNoteAction, updateNoteAction } from "@/app/actions";
+import {
+  addNoteAction,
+  markContactedAction,
+  setContactFrequencyAction,
+  undoContactedAction,
+  updateNoteAction,
+} from "@/app/actions";
 import { BackLink } from "@/components/back-link";
 import { ContactAvatar } from "@/components/contact-avatar";
+import { ContactFrequencyPicker } from "@/components/contact-frequency-picker";
+import { ContactedButton } from "@/components/contacted-button";
 import { NoteForm } from "@/components/note-form";
 import { NoteItem } from "@/components/note-item";
 import { Button } from "@/components/ui/button";
-import { getContact, listNotes } from "@/lib/contacts";
-import { formatDate, formatDateTime, plural } from "@/lib/format";
+import {
+  type ContactTouchStatus,
+  getContact,
+  getContactTouchStatus,
+  listNotes,
+} from "@/lib/contacts";
+import { formatDate, formatDateTime, formatDay, formatOverdue, plural } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { parseId } from "@/lib/validation";
 
 const NOTE_WORDS: [string, string, string] = ["заметка", "заметки", "заметок"];
@@ -25,8 +39,12 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
   const id = parseId((await params).id);
   if (!id) notFound();
 
-  const [contact, notes] = await Promise.all([getContact(id), listNotes(id)]);
-  if (!contact) notFound();
+  const [contact, notes, touch] = await Promise.all([
+    getContact(id),
+    listNotes(id),
+    getContactTouchStatus(id),
+  ]);
+  if (!contact || !touch) notFound();
 
   const details = [
     contact.phone && {
@@ -54,8 +72,38 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
       ),
     },
     contact.howWeMet && { label: "Откуда знакомы", value: contact.howWeMet },
+    {
+      label: "Как часто общаться",
+      labelId: "frequency-label",
+      // Lines the label up with the text of the 40px pills.
+      labelClassName: "sm:pt-3",
+      value: (
+        <div className="pt-1.5 sm:pt-0">
+          <ContactFrequencyPicker
+            frequency={touch.frequency}
+            action={setContactFrequencyAction.bind(null, contact.id)}
+            labelledBy="frequency-label"
+          />
+          {touch.frequency && (
+            <div className="mt-3 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-4 sm:gap-y-2">
+              <TouchStatus status={touch} />
+              <ContactedButton
+                mode="card"
+                markAction={markContactedAction.bind(null, contact.id)}
+                undoAction={undoContactedAction.bind(null, contact.id)}
+              />
+            </div>
+          )}
+        </div>
+      ),
+    },
     { label: "В контактах с", value: formatDate(contact.createdAt) },
-  ].filter(Boolean) as { label: string; value: React.ReactNode }[];
+  ].filter(Boolean) as {
+    label: string;
+    labelId?: string;
+    labelClassName?: string;
+    value: React.ReactNode;
+  }[];
 
   return (
     <main className="page-container pt-4 pb-16">
@@ -85,7 +133,12 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
             key={item.label}
             className="grid gap-1 border-dashed border-line-strong py-3.5 not-first:border-t sm:grid-cols-[10rem_1fr] sm:gap-6 sm:py-4"
           >
-            <dt className="text-14 text-subtle sm:pt-0.5">{item.label}</dt>
+            <dt
+              id={item.labelId}
+              className={cn("text-14 text-subtle sm:pt-0.5", item.labelClassName)}
+            >
+              {item.label}
+            </dt>
             <dd className="text-16 whitespace-pre-wrap">{item.value}</dd>
           </div>
         ))}
@@ -128,5 +181,19 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
         )}
       </section>
     </main>
+  );
+}
+
+function TouchStatus({ status }: { status: Exclude<ContactTouchStatus, { frequency: null }> }) {
+  return status.overdueDays > 0 ? (
+    <p className="flex items-center gap-2 text-15 font-medium text-accent-text">
+      <Clock className="size-4 shrink-0" />
+      Пора связаться: {formatOverdue(status.overdueDays)}
+    </p>
+  ) : (
+    <p className="flex items-center gap-2 text-15 text-muted">
+      <Calendar className="size-4 shrink-0" />
+      Связаться не позже {formatDay(status.dueDate)}
+    </p>
   );
 }

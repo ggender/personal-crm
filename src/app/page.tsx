@@ -1,13 +1,13 @@
 import { CircleCheck, UserPlus } from "lucide-react";
 import Link from "next/link";
 
-import { ContactAvatar } from "@/components/contact-avatar";
+import { ContactListLink } from "@/components/contact-list-link";
 import { ContactSearch } from "@/components/contact-search";
 import { CtaLink } from "@/components/cta-link";
+import { KeepInTouchSection } from "@/components/keep-in-touch-section";
 import { ScrollIntoView } from "@/components/scroll-into-view";
-import { countContacts, listContacts } from "@/lib/contacts";
+import { countContacts, listContacts, listOverdueContacts } from "@/lib/contacts";
 import { plural } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 const CONTACT_WORDS: [string, string, string] = ["контакт", "контакта", "контактов"];
 
@@ -30,7 +30,12 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
   const query = typeof q === "string" ? q.trim() : "";
   const addedId = typeof added === "string" ? Number(added) : null;
 
-  const [items, total] = await Promise.all([listContacts(query), countContacts()]);
+  // The "Пора связаться" block is hidden while searching, so it is not even queried then.
+  const [items, total, overdue] = await Promise.all([
+    listContacts(query),
+    countContacts(),
+    query ? [] : listOverdueContacts(),
+  ]);
   const addedContact = addedId ? items.find((item) => item.id === addedId) : undefined;
 
   return (
@@ -71,6 +76,8 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
         )}
       </header>
 
+      {overdue.length > 0 && <KeepInTouchSection contacts={overdue} />}
+
       {items.length === 0 ? (
         <EmptyState query={query} />
       ) : (
@@ -87,27 +94,22 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
                     id={`contact-${contact.id}`}
                     className="[contain-intrinsic-size:auto_60px] [content-visibility:auto]"
                   >
-                    <Link
-                      href={`/contacts/${contact.id}`}
-                      className={cn(
-                        "flex items-center gap-3 rounded-12 px-2.5 py-2.5 transition-colors hover:bg-strip/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
-                        contact.id === addedId &&
-                          "bg-note ring-2 ring-accent/50 ring-inset hover:bg-note",
-                      )}
+                    <ContactListLink
+                      id={contact.id}
+                      name={contact.name}
+                      highlighted={contact.id === addedId}
+                      aside={
+                        contact.phone && (
+                          <span className="hidden shrink-0 text-14 text-subtle tabular-nums sm:block">
+                            {contact.phone}
+                          </span>
+                        )
+                      }
                     >
-                      <ContactAvatar name={contact.name} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-serif text-17 font-medium">{contact.name}</p>
-                        {contact.about && (
-                          <p className="mt-0.5 truncate text-14 text-subtle">{contact.about}</p>
-                        )}
-                      </div>
-                      {contact.phone && (
-                        <span className="hidden shrink-0 text-14 text-subtle tabular-nums sm:block">
-                          {contact.phone}
-                        </span>
+                      {contact.about && (
+                        <p className="mt-0.5 truncate text-14 text-subtle">{contact.about}</p>
                       )}
-                    </Link>
+                    </ContactListLink>
                   </li>
                 ))}
               </ul>

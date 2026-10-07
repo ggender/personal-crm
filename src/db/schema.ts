@@ -1,5 +1,8 @@
 import { sql } from "drizzle-orm";
-import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { check, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+
+// Relative import: drizzle-kit does not resolve the "@/" alias.
+import { CONTACT_FREQUENCIES } from "../lib/keep-in-touch";
 
 // Russian alphabetical order (the default collation in the Alpine image sorts by code point).
 export const RU_COLLATION = "ru-x-icu";
@@ -15,10 +18,20 @@ export const contacts = pgTable(
     howWeMet: text("how_we_met"),
     phone: text(),
     email: text(),
+    // How often to keep in touch; NULL means "Не задано"
+    contactFrequency: text("contact_frequency", { enum: CONTACT_FREQUENCIES }),
+    // Last time "Пообщались" was pressed; NULL means never
+    lastContactedAt: timestamp("last_contacted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("contacts_name_idx").on(sql`${t.name} collate "ru-x-icu"`)],
+  (t) => [
+    index("contacts_name_idx").on(sql`${t.name} collate "ru-x-icu"`),
+    check(
+      "contacts_contact_frequency_check",
+      sql`${t.contactFrequency} in (${sql.raw(CONTACT_FREQUENCIES.map((value) => `'${value}'`).join(", "))})`,
+    ),
+  ],
 );
 
 export const notes = pgTable(
