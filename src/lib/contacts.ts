@@ -97,19 +97,3 @@ export async function updateNote(contactId: number, noteId: number, body: string
     return true;
   });
 }
-
-/** Returns false when the note does not exist or belongs to another contact. */
-export async function deleteNote(contactId: number, noteId: number) {
-  return getDb().transaction(async (tx) => {
-    const deleted = await tx
-      .delete(notes)
-      .where(and(eq(notes.id, noteId), eq(notes.contactId, contactId)))
-      .returning({ id: notes.id });
-    if (deleted.length === 0) return false;
-    await tx
-      .update(contacts)
-      .set({ updatedAt: sql`now()` })
-      .where(eq(contacts.id, contactId));
-    return true;
-  });
-}

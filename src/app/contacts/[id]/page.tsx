@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addNoteAction, deleteNoteAction, updateNoteAction } from "@/app/actions";
+import { addNoteAction, updateNoteAction } from "@/app/actions";
 import { BackLink } from "@/components/back-link";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { NoteForm } from "@/components/note-form";
@@ -122,7 +122,6 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
                   </time>
                 }
                 updateAction={updateNoteAction.bind(null, contact.id, note.id)}
-                deleteAction={deleteNoteAction.bind(null, contact.id, note.id)}
               />
             ))}
           </ol>

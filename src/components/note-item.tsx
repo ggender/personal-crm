@@ -1,10 +1,9 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 
-import type { DeleteResult, NoteFormState } from "@/app/actions";
-import { ConfirmDelete } from "@/components/confirm-delete";
+import type { NoteFormState } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,10 +15,9 @@ type NoteItemProps = {
   /** Rendered on the server, so the date is formatted in one place and time zone. */
   time: React.ReactNode;
   updateAction: NoteAction;
-  deleteAction: () => Promise<DeleteResult>;
 };
 
-export function NoteItem({ body, time, updateAction, deleteAction }: NoteItemProps) {
+export function NoteItem({ body, time, updateAction }: NoteItemProps) {
   const [editing, setEditing] = useState(false);
 
   return (
@@ -27,31 +25,15 @@ export function NoteItem({ body, time, updateAction, deleteAction }: NoteItemPro
       <div className="mb-1 flex min-h-7 items-center justify-between gap-2">
         {time}
         {!editing && (
-          <div className="-mr-2 flex">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-subtle hover:text-ink"
-              aria-label="Изменить заметку"
-              onClick={() => setEditing(true)}
-            >
-              <Pencil />
-            </Button>
-            <ConfirmDelete
-              title="Удалить заметку?"
-              description="Восстановить её не получится."
-              action={deleteAction}
-            >
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-subtle hover:text-ink"
-                aria-label="Удалить заметку"
-              >
-                <Trash2 />
-              </Button>
-            </ConfirmDelete>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="-mr-2 text-subtle hover:text-ink"
+            aria-label="Изменить заметку"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil />
+          </Button>
         )}
       </div>
       {editing ? (
