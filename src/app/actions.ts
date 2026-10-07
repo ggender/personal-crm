@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { z } from "zod";
 
-import { addNote, createContact, updateContact, updateNote } from "@/lib/contacts";
+import { addNote, createContact, deleteContact, updateContact, updateNote } from "@/lib/contacts";
 import {
   contactInputSchema,
   type ContactField,
@@ -22,6 +22,10 @@ export type NoteFormState = {
   error?: string;
   body?: string;
   savedAt?: number;
+};
+
+export type DeleteResult = {
+  error?: string;
 };
 
 const contactFields: ContactField[] = ["name", "about", "howWeMet", "phone", "email", "firstNote"];
@@ -93,6 +97,24 @@ export async function updateContactAction(
   revalidatePath("/");
   revalidatePath(`/contacts/${contactId}`);
   redirect(`/contacts/${contactId}`);
+}
+
+export async function deleteContactAction(contactId: number): Promise<DeleteResult> {
+  if (!isValidId(contactId)) {
+    return { error: "Контакт не найден" };
+  }
+
+  try {
+    await deleteContact(contactId);
+  } catch (error) {
+    console.error("Failed to delete contact", error);
+    return { error: "Не удалось удалить контакт. Попробуйте ещё раз." };
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/contacts/${contactId}`);
+  // Already gone (e.g. deleted in another tab) is fine too: the goal is reached, return to the list.
+  redirect("/");
 }
 
 export async function addNoteAction(
