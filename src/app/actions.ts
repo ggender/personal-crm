@@ -4,14 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { z } from "zod";
 
-import {
-  addNote,
-  createContact,
-  deleteContact,
-  deleteNote,
-  updateContact,
-  updateNote,
-} from "@/lib/contacts";
+import { addNote, createContact, deleteNote, updateContact, updateNote } from "@/lib/contacts";
 import {
   contactInputSchema,
   type ContactField,
@@ -104,25 +97,6 @@ export async function updateContactAction(
   revalidatePath("/");
   revalidatePath(`/contacts/${contactId}`);
   redirect(`/contacts/${contactId}`);
-}
-
-export async function deleteContactAction(contactId: number): Promise<DeleteResult> {
-  if (!isValidId(contactId)) {
-    return { error: "Контакт не найден" };
-  }
-
-  let name: string | null;
-  try {
-    name = await deleteContact(contactId);
-  } catch (error) {
-    console.error("Failed to delete contact", error);
-    return { error: "Не удалось удалить контакт. Попробуйте ещё раз." };
-  }
-
-  revalidatePath("/");
-  revalidatePath(`/contacts/${contactId}`);
-  // Already gone (e.g. deleted in another tab): the goal is reached, return to the list anyway.
-  redirect(name ? `/?deleted=${encodeURIComponent(name)}` : "/");
 }
 
 export async function addNoteAction(
