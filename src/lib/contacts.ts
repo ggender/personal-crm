@@ -38,15 +38,6 @@ export async function getContact(id: number) {
   return contact ?? null;
 }
 
-export async function countNotes(contactId: number) {
-  await connection();
-  const [{ value }] = await getDb()
-    .select({ value: count() })
-    .from(notes)
-    .where(eq(notes.contactId, contactId));
-  return value;
-}
-
 export async function listNotes(contactId: number) {
   await connection();
   return getDb()
@@ -90,18 +81,6 @@ export async function updateContact(id: number, fields: ContactUpdate) {
   return updated.length > 0;
 }
 
-/**
- * Deletes the contact together with its notes (the foreign key cascades).
- * Returns the deleted contact's name, or null when it does not exist.
- */
-export async function deleteContact(id: number) {
-  const [deleted] = await getDb()
-    .delete(contacts)
-    .where(eq(contacts.id, id))
-    .returning({ name: contacts.name });
-  return deleted?.name ?? null;
-}
-
 /** Returns false when the note does not exist or belongs to another contact. */
 export async function updateNote(contactId: number, noteId: number, body: string) {
   return getDb().transaction(async (tx) => {
@@ -111,22 +90,6 @@ export async function updateNote(contactId: number, noteId: number, body: string
       .where(and(eq(notes.id, noteId), eq(notes.contactId, contactId)))
       .returning({ id: notes.id });
     if (updated.length === 0) return false;
-    await tx
-      .update(contacts)
-      .set({ updatedAt: sql`now()` })
-      .where(eq(contacts.id, contactId));
-    return true;
-  });
-}
-
-/** Returns false when the note does not exist or belongs to another contact. */
-export async function deleteNote(contactId: number, noteId: number) {
-  return getDb().transaction(async (tx) => {
-    const deleted = await tx
-      .delete(notes)
-      .where(and(eq(notes.id, noteId), eq(notes.contactId, contactId)))
-      .returning({ id: notes.id });
-    if (deleted.length === 0) return false;
     await tx
       .update(contacts)
       .set({ updatedAt: sql`now()` })

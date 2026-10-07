@@ -4,14 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { z } from "zod";
 
-import {
-  addNote,
-  createContact,
-  deleteContact,
-  deleteNote,
-  updateContact,
-  updateNote,
-} from "@/lib/contacts";
+import { addNote, createContact, updateContact, updateNote } from "@/lib/contacts";
 import {
   contactInputSchema,
   type ContactField,
@@ -29,10 +22,6 @@ export type NoteFormState = {
   error?: string;
   body?: string;
   savedAt?: number;
-};
-
-export type DeleteResult = {
-  error?: string;
 };
 
 const contactFields: ContactField[] = ["name", "about", "howWeMet", "phone", "email", "firstNote"];
@@ -95,7 +84,7 @@ export async function updateContactAction(
 
   try {
     const saved = await updateContact(contactId, parsed.data);
-    if (!saved) return { message: "Контакт не найден — возможно, его уже удалили.", values };
+    if (!saved) return { message: "Контакт не найден", values };
   } catch (error) {
     console.error("Failed to update contact", error);
     return { message: "Не удалось сохранить изменения. Попробуйте ещё раз.", values };
@@ -104,25 +93,6 @@ export async function updateContactAction(
   revalidatePath("/");
   revalidatePath(`/contacts/${contactId}`);
   redirect(`/contacts/${contactId}`);
-}
-
-export async function deleteContactAction(contactId: number): Promise<DeleteResult> {
-  if (!isValidId(contactId)) {
-    return { error: "Контакт не найден" };
-  }
-
-  let name: string | null;
-  try {
-    name = await deleteContact(contactId);
-  } catch (error) {
-    console.error("Failed to delete contact", error);
-    return { error: "Не удалось удалить контакт. Попробуйте ещё раз." };
-  }
-
-  revalidatePath("/");
-  revalidatePath(`/contacts/${contactId}`);
-  // Already gone (e.g. deleted in another tab): the goal is reached, return to the list anyway.
-  redirect(name ? `/?deleted=${encodeURIComponent(name)}` : "/");
 }
 
 export async function addNoteAction(
@@ -168,7 +138,7 @@ export async function updateNoteAction(
 
   try {
     const saved = await updateNote(contactId, noteId, parsed.data.body);
-    if (!saved) return { error: "Заметка не найдена — возможно, её уже удалили.", body };
+    if (!saved) return { error: "Заметка не найдена", body };
   } catch (error) {
     console.error("Failed to update note", error);
     return { error: "Не удалось сохранить заметку. Попробуйте ещё раз.", body };
@@ -176,21 +146,4 @@ export async function updateNoteAction(
 
   revalidatePath(`/contacts/${contactId}`);
   return { savedAt: Date.now() };
-}
-
-export async function deleteNoteAction(contactId: number, noteId: number): Promise<DeleteResult> {
-  if (!isValidId(contactId) || !isValidId(noteId)) {
-    return { error: "Заметка не найдена" };
-  }
-
-  try {
-    // A note that is already gone counts as deleted.
-    await deleteNote(contactId, noteId);
-  } catch (error) {
-    console.error("Failed to delete note", error);
-    return { error: "Не удалось удалить заметку. Попробуйте ещё раз." };
-  }
-
-  revalidatePath(`/contacts/${contactId}`);
-  return {};
 }
