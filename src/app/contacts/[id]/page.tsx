@@ -5,7 +5,9 @@ import { notFound } from "next/navigation";
 
 import {
   addNoteAction,
+  createGroupForContactAction,
   markContactedAction,
+  setContactGroupAction,
   setContactFrequencyAction,
   undoContactedAction,
   updateNoteAction,
@@ -13,6 +15,7 @@ import {
 import { BackLink } from "@/components/back-link";
 import { ContactAvatar } from "@/components/contact-avatar";
 import { ContactFrequencyPicker } from "@/components/contact-frequency-picker";
+import { ContactGroupsPicker } from "@/components/contact-groups-picker";
 import { ContactedButton } from "@/components/contacted-button";
 import { NoteForm } from "@/components/note-form";
 import { NoteItem } from "@/components/note-item";
@@ -24,6 +27,7 @@ import {
   listNotes,
 } from "@/lib/contacts";
 import { formatDate, formatDateTime, formatDay, formatOverdue, plural } from "@/lib/format";
+import { getContactGroupIds, listGroups } from "@/lib/groups";
 import { cn } from "@/lib/utils";
 import { parseId } from "@/lib/validation";
 
@@ -39,10 +43,12 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
   const id = parseId((await params).id);
   if (!id) notFound();
 
-  const [contact, notes, touch] = await Promise.all([
+  const [contact, notes, touch, groups, groupIds] = await Promise.all([
     getContact(id),
     listNotes(id),
     getContactTouchStatus(id),
+    listGroups(),
+    getContactGroupIds(id),
   ]);
   if (!contact || !touch) notFound();
 
@@ -72,6 +78,23 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
       ),
     },
     contact.howWeMet && { label: "Откуда знакомы", value: contact.howWeMet },
+    {
+      label: "Группы",
+      labelId: "groups-label",
+      // Lines the label up with the text of the 40px pills.
+      labelClassName: "sm:pt-3",
+      value: (
+        <div className="pt-1.5 sm:pt-0">
+          <ContactGroupsPicker
+            groups={groups}
+            selectedIds={groupIds}
+            setAction={setContactGroupAction.bind(null, contact.id)}
+            createAction={createGroupForContactAction.bind(null, contact.id)}
+            labelledBy="groups-label"
+          />
+        </div>
+      ),
+    },
     {
       label: "Как часто общаться",
       labelId: "frequency-label",

@@ -14,12 +14,20 @@ import {
   updateContact,
   updateNote,
 } from "@/lib/contacts";
+import {
+  addContactToNewGroup,
+  createGroup,
+  deleteGroup,
+  renameGroup,
+  setContactGroup,
+} from "@/lib/groups";
 import type { ContactFrequency } from "@/lib/keep-in-touch";
 import {
   contactFrequencySchema,
   contactInputSchema,
   type ContactField,
   contactUpdateSchema,
+  groupNameSchema,
   noteInputSchema,
   undoContactedSchema,
 } from "@/lib/validation";
@@ -33,6 +41,13 @@ export type ContactFormState = {
 export type NoteFormState = {
   error?: string;
   body?: string;
+  savedAt?: number;
+};
+
+export type GroupFormState = {
+  error?: string;
+  /** The name that was sent, so a failed form keeps it in the field. */
+  name?: string;
   savedAt?: number;
 };
 
@@ -53,7 +68,10 @@ const contactUpdateFields: ContactField[] = ["name", "about", "howWeMet", "phone
 const isValidId = (id: number) => Number.isSafeInteger(id) && id > 0;
 
 const NOT_FOUND = "Контакт не найден";
+const GROUP_NOT_FOUND = "Группа не найдена";
 const SAVE_FAILED = "Не удалось сохранить. Попробуйте ещё раз.";
+
+const groupDuplicateMessage = (existingName: string) => `Группа «${existingName}» уже есть`;
 
 function readFields(formData: FormData, fields: ContactField[]) {
   return Object.fromEntries(
@@ -257,4 +275,109 @@ export async function undoContactedAction(
     return { error: SAVE_FAILED };
   }
   return {};
+}
+
+export async function createGroupAction(
+  _prev: GroupFormState,
+  formData: FormData,
+): Promise<GroupFormState> {
+  const name = String(formData.get("name") ?? "");
+  const parsed = groupNameSchema.safeParse(name);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message, name };
+
+  try {
+    const result = await createGroup(parsed.data);
+    if ("duplicateOf" in result) return { error: groupDuplicateMessage(result.duplicateOf), name };
+  } catch (error) {
+    console.error("Failed to create group", error);
+    return { error: SAVE_FAILED, name };
+  }
+
+  // The group name is shown on every page: the filter, the contact pages and the list labels.
+  revalidatePath("/", "layout");
+  return { savedAt: Date.now() };
+}
+
+export async function renameGroupAction(
+  groupId: number,
+  _prev: GroupFormState,
+  formData: FormData,
+): Promise<GroupFormState> {
+  const name = String(formData.get("name") ?? "");
+  const parsed = groupNameSchema.safeParse(name);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message, name };
+  if (!isValidId(groupId)) return { error: GROUP_NOT_FOUND, name };
+
+  try {
+    const result = await renameGroup(groupId, parsed.data);
+    if (result === "not-found") return { error: GROUP_NOT_FOUND, name };
+    if (result !== "ok") return { error: groupDuplicateMessage(result.duplicateOf), name };
+  } catch (error) {
+    console.error("Failed to rename group", error);
+    return { error: SAVE_FAILED, name };
+  }
+
+  revalidatePath("/", "layout");
+  return { savedAt: Date.now() };
+}
+
+export async function deleteGroupAction(groupId: number): Promise<DeleteResult> {
+  if (!isValidId(groupId)) return { error: GROUP_NOT_FOUND };
+
+  try {
+    // A group that is already gone (deleted in another tab) is fine: the goal is reached.
+    await deleteGroup(groupId);
+  } catch (error) {
+    console.error("Failed to delete group", error);
+    return { error: SAVE_FAILED };
+  }
+
+  revalidatePath("/", "layout");
+  return {};
+}
+
+export async function setContactGroupAction(
+  contactId: number,
+  groupId: number,
+  member: boolean,
+): Promise<SaveResult> {
+  if (!isValidId(contactId)) return { error: NOT_FOUND };
+  if (!isValidId(groupId)) return { error: GROUP_NOT_FOUND };
+
+  try {
+    const result = await setContactGroup(contactId, groupId, member === true);
+    if (result === "contact-not-found") return { error: NOT_FOUND };
+    if (result === "group-not-found") return { error: GROUP_NOT_FOUND };
+  } catch (error) {
+    console.error("Failed to set contact group", error);
+    return { error: SAVE_FAILED };
+  }
+
+  // The contact page, its labels in the list and the group sizes on the "Группы" page change.
+  revalidatePath("/");
+  revalidatePath(`/contacts/${contactId}`);
+  revalidatePath("/groups");
+  return {};
+}
+
+export async function createGroupForContactAction(
+  contactId: number,
+  _prev: GroupFormState,
+  formData: FormData,
+): Promise<GroupFormState> {
+  const name = String(formData.get("name") ?? "");
+  const parsed = groupNameSchema.safeParse(name);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message, name };
+  if (!isValidId(contactId)) return { error: NOT_FOUND, name };
+
+  try {
+    const added = await addContactToNewGroup(contactId, parsed.data);
+    if (!added) return { error: NOT_FOUND, name };
+  } catch (error) {
+    console.error("Failed to create group for contact", error);
+    return { error: SAVE_FAILED, name };
+  }
+
+  revalidatePath("/", "layout");
+  return { savedAt: Date.now() };
 }

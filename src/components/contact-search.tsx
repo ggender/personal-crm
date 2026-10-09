@@ -5,10 +5,19 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useTransition } from "react";
 
 import { Input } from "@/components/ui/input";
+import type { GroupFilter } from "@/lib/contacts";
+import { contactsHref } from "@/lib/group-filter";
 
 const DEBOUNCE_MS = 200;
 
-export function ContactSearch({ defaultValue }: { defaultValue: string }) {
+export function ContactSearch({
+  defaultValue,
+  filter,
+}: {
+  defaultValue: string;
+  /** The chosen group: a search stays inside it. */
+  filter: GroupFilter;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const timer = useRef<number | undefined>(undefined);
@@ -18,7 +27,7 @@ export function ContactSearch({ defaultValue }: { defaultValue: string }) {
   function search(value: string) {
     window.clearTimeout(timer.current);
     const query = value.trim();
-    const href = query ? `/?q=${encodeURIComponent(query)}` : "/";
+    const href = contactsHref({ filter, query });
     startTransition(() => router.replace(href, { scroll: false }));
   }
 
@@ -33,6 +42,13 @@ export function ContactSearch({ defaultValue }: { defaultValue: string }) {
         search(new FormData(event.currentTarget).get("q")?.toString() ?? "");
       }}
     >
+      {filter.kind !== "all" && (
+        <input
+          type="hidden"
+          name="group"
+          value={filter.kind === "group" ? filter.groupId : "none"}
+        />
+      )}
       <Search className="pointer-events-none absolute top-1/2 left-4 size-4.5 -translate-y-1/2 text-accent" />
       <Input
         type="search"

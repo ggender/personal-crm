@@ -1,13 +1,23 @@
-import { CircleCheck, UserPlus } from "lucide-react";
+import { CircleCheck, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 
 import { ContactListLink } from "@/components/contact-list-link";
 import { ContactSearch } from "@/components/contact-search";
 import { CtaLink } from "@/components/cta-link";
+import { GroupFilter } from "@/components/group-filter";
+import { GroupLabels } from "@/components/group-labels";
 import { KeepInTouchSection } from "@/components/keep-in-touch-section";
 import { ScrollIntoView } from "@/components/scroll-into-view";
 import { countContacts, listContacts, listOverdueContacts } from "@/lib/contacts";
 import { plural } from "@/lib/format";
+import { listGroups } from "@/lib/groups";
+import {
+  type EmptyListMessage,
+  emptyListMessage,
+  groupFilterItems,
+  resolveGroupFilter,
+} from "@/lib/group-filter";
+import { cn } from "@/lib/utils";
 
 const CONTACT_WORDS: [string, string, string] = ["контакт", "контакта", "контактов"];
 
@@ -26,14 +36,19 @@ function groupByLetter(items: ContactListItem[]) {
 }
 
 export default async function ContactsPage({ searchParams }: PageProps<"/">) {
-  const { q, added } = await searchParams;
+  const { q, added, group } = await searchParams;
   const query = typeof q === "string" ? q.trim() : "";
   const addedId = typeof added === "string" ? Number(added) : null;
 
+  // The groups come first: they tell whether `?group=` is still a group that exists.
+  const groups = await listGroups();
+  const filter = resolveGroupFilter(group, groups);
+
   // The "Пора связаться" block is hidden while searching, so it is not even queried then.
+  // It ignores the group filter: everyone overdue is in it.
   const [items, total, overdue] = await Promise.all([
-    listContacts(query),
-    countContacts(),
+    listContacts(query, filter),
+    countContacts(filter),
     query ? [] : listOverdueContacts(),
   ]);
   const addedContact = addedId ? items.find((item) => item.id === addedId) : undefined;
@@ -55,7 +70,8 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
             <span className="sr-only sm:not-sr-only"> контакт</span>
           </CtaLink>
         </div>
-        <ContactSearch defaultValue={query} />
+        <ContactSearch defaultValue={query} filter={filter} />
+        <GroupFilter items={groupFilterItems(groups, filter, query)} />
         {addedContact && (
           <div
             role="status"
@@ -79,7 +95,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
       {overdue.length > 0 && <KeepInTouchSection contacts={overdue} />}
 
       {items.length === 0 ? (
-        <EmptyState query={query} />
+        <EmptyState query={query} filteredMessage={emptyListMessage(filter, groups, query)} />
       ) : (
         <div className="space-y-5">
           {groupByLetter(items).map((group) => (
@@ -92,7 +108,13 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
                   <li
                     key={contact.id}
                     id={`contact-${contact.id}`}
-                    className="[contain-intrinsic-size:auto_60px] [content-visibility:auto]"
+                    className={cn(
+                      "[content-visibility:auto]",
+                      // A guess at the row height before it is drawn; a row with tags is taller.
+                      contact.groups.length > 0
+                        ? "[contain-intrinsic-size:auto_80px]"
+                        : "[contain-intrinsic-size:auto_60px]",
+                    )}
                   >
                     <ContactListLink
                       id={contact.id}
@@ -109,6 +131,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
                       {contact.about && (
                         <p className="mt-0.5 truncate text-14 text-subtle">{contact.about}</p>
                       )}
+                      <GroupLabels names={contact.groups} />
                     </ContactListLink>
                   </li>
                 ))}
@@ -121,7 +144,33 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
   );
 }
 
-function EmptyState({ query }: { query: string }) {
+function EmptyState({
+  query,
+  filteredMessage,
+}: {
+  query: string;
+  /** Set while a group or "Без группы" is chosen. */
+  filteredMessage: EmptyListMessage | null;
+}) {
+  if (filteredMessage) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <Users className="size-10 text-faint" />
+        <p className="font-serif text-24 font-medium text-balance break-words">
+          {filteredMessage.title}
+        </p>
+        {filteredMessage.searchAllHref && (
+          <Link
+            href={filteredMessage.searchAllHref}
+            className="font-medium text-accent-text underline underline-offset-4"
+          >
+            Искать во всех контактах
+          </Link>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-3 py-16 text-center">
       <UserPlus className="size-10 text-faint" />
