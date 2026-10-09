@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write .",
     "env:init": "node scripts/init-env.mjs",
@@ -38,6 +39,7 @@
   "devDependencies": {
     "@faker-js/faker": "^10.6.0",
     "@next/env": "^16.3.8",
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

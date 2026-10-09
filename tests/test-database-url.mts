@@ -1,7 +1,11 @@
-// @next/env is a CommonJS package: its functions are reached through the default import.
-import nextEnv from "@next/env";
+import * as nextEnv from "@next/env";
 
-const { loadEnvConfig } = nextEnv;
+type NextEnv = typeof import("@next/env");
+
+// @next/env is a CommonJS package. Native ESM (Vitest) puts its functions under `default`,
+// Playwright's TypeScript transform exposes them directly.
+const { loadEnvConfig }: NextEnv =
+  "loadEnvConfig" in nextEnv ? nextEnv : (nextEnv as unknown as { default: NextEnv }).default;
 
 /** The suffix every database the tests may touch must have. */
 export const TEST_DATABASE_SUFFIX = "_test";
@@ -40,6 +44,29 @@ export function getTestDatabaseUrl() {
   }
   const name = decodeURIComponent(new URL(base).pathname.slice(1));
   const url = withDatabaseName(base, name.endsWith(TEST_DATABASE_SUFFIX) ? name : `${name}_test`);
+  assertTestDatabaseUrl(url);
+  return url;
+}
+
+/**
+ * Connection string of the end-to-end test database: E2E_DATABASE_URL (e.g. in CI), otherwise
+ * the DATABASE_URL from .env with the database name changed to "<name>_e2e_test". It is separate
+ * from the Vitest one, so both kinds of tests can run at the same time without clearing each
+ * other's data.
+ */
+export function getE2eDatabaseUrl() {
+  loadEnvConfig(process.cwd());
+  const explicit = process.env.E2E_DATABASE_URL;
+  if (explicit) {
+    assertTestDatabaseUrl(explicit);
+    return explicit;
+  }
+  const base = process.env.DATABASE_URL;
+  if (!base) {
+    throw new Error("DATABASE_URL is not set. Run `pnpm env:init` to create .env.");
+  }
+  const name = decodeURIComponent(new URL(base).pathname.slice(1)).replace(/(_e2e)?_test$/, "");
+  const url = withDatabaseName(base, `${name}_e2e_test`);
   assertTestDatabaseUrl(url);
   return url;
 }
