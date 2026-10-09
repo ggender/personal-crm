@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 // Relative import: drizzle-kit does not resolve the "@/" alias.
 import { CONTACT_FREQUENCIES } from "../lib/keep-in-touch";
@@ -47,6 +56,39 @@ export const notes = pgTable(
   (t) => [index("notes_contact_id_created_at_idx").on(t.contactId, t.createdAt)],
 );
 
+export const groups = pgTable(
+  "groups",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: text().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Names are unique regardless of letter case: "Теннис" and "теннис" are the same group.
+    uniqueIndex("groups_name_lower_idx").on(sql`lower(${t.name})`),
+    check("groups_name_length_check", sql`char_length(${t.name}) between 1 and 50`),
+  ],
+);
+
+// Which contact is in which group. Deleting either side removes only the link.
+export const groupMembers = pgTable(
+  "group_members",
+  {
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    contactId: integer("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.groupId, t.contactId] }),
+    index("group_members_contact_id_idx").on(t.contactId),
+  ],
+);
+
 export type Contact = typeof contacts.$inferSelect;
 export type NewContact = typeof contacts.$inferInsert;
 export type Note = typeof notes.$inferSelect;
+export type Group = typeof groups.$inferSelect;

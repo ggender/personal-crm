@@ -44,6 +44,13 @@ export const noteInputSchema = z.object({
   body: z.string().trim().min(1, "Напишите текст заметки").max(5000, "Не длиннее 5000 символов"),
 });
 
+/** A group name: 1-50 characters, spaces at both ends are dropped. */
+export const groupNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Укажите название")
+  .max(50, "Не длиннее 50 символов");
+
 /** Keep in touch: null means "Не задано". */
 export const contactFrequencySchema = z.enum(CONTACT_FREQUENCIES).nullable();
 

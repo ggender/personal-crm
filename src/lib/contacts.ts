@@ -1,10 +1,10 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNotNull, type SQL, sql } from "drizzle-orm";
 import { connection } from "next/server";
 
 import { getDb } from "@/db";
-import { contacts, notes, RU_COLLATION } from "@/db/schema";
+import { contacts, groupMembers, groups, notes, RU_COLLATION } from "@/db/schema";
 import { APP_TIME_ZONE, CONTACT_FREQUENCIES, type ContactFrequency } from "@/lib/keep-in-touch";
 import type { ContactInput, ContactUpdate } from "@/lib/validation";
 
@@ -41,7 +41,33 @@ const dueDate = sql`((${lastContactAt} at time zone ${APP_TIME_ZONE})::date + ${
 const today = sql`(now() at time zone ${APP_TIME_ZONE})::date`;
 const overdueDays = sql<number | null>`(${today} - ${dueDate})`.mapWith(Number);
 
-export async function listContacts(query: string) {
+/** Which part of the list the home page shows: everyone, one group, or people without a group. */
+export type GroupFilter = { kind: "all" } | { kind: "group"; groupId: number } | { kind: "none" };
+
+const isMemberOf = (condition?: SQL) => sql`exists (
+  select 1 from ${groupMembers}
+  where ${groupMembers.contactId} = ${contacts.id}${condition ? sql` and ${condition}` : sql``}
+)`;
+
+/** The SQL condition for a filter; undefined for "all". */
+function groupCondition(filter: GroupFilter) {
+  if (filter.kind === "group") return isMemberOf(eq(groupMembers.groupId, filter.groupId));
+  if (filter.kind === "none") return sql`not ${isMemberOf()}`;
+  return undefined;
+}
+
+// Names of the contact's groups in alphabetical order, one subquery for the whole list.
+// Kept as a separate SQL object: Drizzle strips table names from the columns that sit directly in
+// a single-table select field, and "id" would then mean groups.id instead of contacts.id.
+const groupLabelsQuery = sql`array(
+  select ${groups.name} from ${groupMembers}
+  inner join ${groups} on ${groups.id} = ${groupMembers.groupId}
+  where ${groupMembers.contactId} = ${contacts.id}
+  order by ${groups.name} collate ${sql.identifier(RU_COLLATION)}, ${groups.id}
+)`;
+const groupLabels = sql<string[]>`${groupLabelsQuery}`;
+
+export async function listContacts(query: string, filter: GroupFilter) {
   await connection();
   const words = normalizeForSearch(query).split(/\s+/).filter(Boolean);
   // Every word must appear in the name, in any order: "петров иван" finds "Иван Петров".
@@ -50,9 +76,15 @@ export async function listContacts(query: string) {
   );
 
   return getDb()
-    .select({ id: contacts.id, name: contacts.name, about: contacts.about, phone: contacts.phone })
+    .select({
+      id: contacts.id,
+      name: contacts.name,
+      about: contacts.about,
+      phone: contacts.phone,
+      groups: groupLabels,
+    })
     .from(contacts)
-    .where(and(...conditions))
+    .where(and(...conditions, groupCondition(filter)))
     .orderBy(byName, asc(contacts.id));
 }
 
@@ -98,9 +130,12 @@ export async function getContactTouchStatus(contactId: number): Promise<ContactT
   return { frequency: row.frequency, dueDate: row.dueDate, overdueDays: row.overdueDays };
 }
 
-export async function countContacts() {
+export async function countContacts(filter: GroupFilter) {
   await connection();
-  const [{ value }] = await getDb().select({ value: count() }).from(contacts);
+  const [{ value }] = await getDb()
+    .select({ value: count() })
+    .from(contacts)
+    .where(groupCondition(filter));
   return value;
 }
 
