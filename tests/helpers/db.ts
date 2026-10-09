@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
-import { contacts, type NewContact } from "@/db/schema";
+import { contacts, type NewContact, notes } from "@/db/schema";
 
 import { assertTestDatabaseUrl } from "../test-database-url.mts";
 
@@ -63,4 +63,10 @@ export async function makeContacts(names: string[]) {
   const made = [];
   for (const name of names) made.push(await makeContact({ name }));
   return made;
+}
+
+/** A note written at `createdAt`, as if it had been added back then. */
+export async function makeNote(contactId: number, createdAt: Date, body = "Созвонились") {
+  const [row] = await testDb().insert(notes).values({ contactId, body, createdAt }).returning();
+  return row;
 }

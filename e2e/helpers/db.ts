@@ -30,6 +30,29 @@ export async function makeContacts(names: string[]) {
   for (const name of names) await db`insert into contacts (name) values (${name})`;
 }
 
+/** Adds one contact straight to the database; returns its id. */
+export async function makeContact({
+  name,
+  frequency = null,
+  createdAt = new Date(),
+}: {
+  name: string;
+  frequency?: "weekly" | "monthly" | "quarterly" | "yearly" | null;
+  createdAt?: Date;
+}) {
+  const [{ id }] = await sql()<{ id: number }[]>`
+    insert into contacts (name, contact_frequency, created_at)
+    values (${name}, ${frequency}, ${createdAt})
+    returning id
+  `;
+  return id;
+}
+
+/** A note written at `createdAt`, as if it had been added back then. */
+export async function makeNote(contactId: number, createdAt: Date, body = "Созвонились") {
+  await sql()`insert into notes (contact_id, body, created_at) values (${contactId}, ${body}, ${createdAt})`;
+}
+
 export async function closeDb() {
   await client?.end();
   client = undefined;
