@@ -33,6 +33,12 @@ export default defineConfig({
       E2E_DATABASE_URL: databaseUrl,
       // A separate build folder, so a running `pnpm dev` is not disturbed.
       NEXT_DIST_DIR: ".next/e2e",
+      // Login: links in the emails point to the test server; the emails go to Mailpit (the one
+      // from docker-compose.yml, a service in CI), where the tests read them.
+      BETTER_AUTH_SECRET: "e2e-only-secret-0123456789abcdef0123456789abcdef",
+      BETTER_AUTH_URL: baseURL,
+      SMTP_URL: "smtp://127.0.0.1:1025",
+      MAIL_FROM: "Личная CRM <noreply@mail.crm.vprodcrm.ru>",
     },
   },
 });

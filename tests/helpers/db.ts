@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
+
 import { sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
-import { contacts, type NewContact, notes } from "@/db/schema";
+import { contacts, type NewContact, notes, users } from "@/db/schema";
 
 import { assertTestDatabaseUrl } from "../test-database-url.mts";
 
@@ -40,14 +42,28 @@ export async function rowCount(table: string) {
   return row.value;
 }
 
-export async function makeContact(fields: Partial<NewContact> & { name: string }) {
-  const [row] = await testDb().insert(contacts).values(fields).returning();
+/** A user who has signed in before, as the login leaves him: just the row with the email. */
+export async function makeUser(email = `user-${randomUUID()}@example.test`) {
+  const [row] = await testDb().insert(users).values({ name: "", email }).returning();
   return row;
 }
 
-export async function makeGroup(name: string) {
+/** A contact of this user. */
+export async function makeContact(
+  userId: string,
+  fields: Partial<Omit<NewContact, "userId">> & { name: string },
+) {
+  const [row] = await testDb()
+    .insert(contacts)
+    .values({ ...fields, userId })
+    .returning();
+  return row;
+}
+
+/** A group of this user; returns its id. */
+export async function makeGroup(userId: string, name: string) {
   const [row] = await testDb().execute<{ id: number }>(
-    sql`insert into groups (name) values (${name}) returning id`,
+    sql`insert into groups (name, user_id) values (${name}, ${userId}) returning id`,
   );
   return row.id;
 }
@@ -58,10 +74,10 @@ export async function addMember(groupId: number, contactId: number) {
   );
 }
 
-/** Several contacts at once; returns them in the order of the names. */
-export async function makeContacts(names: string[]) {
+/** Several contacts of this user at once; returns them in the order of the names. */
+export async function makeContacts(userId: string, names: string[]) {
   const made = [];
-  for (const name of names) made.push(await makeContact({ name }));
+  for (const name of names) made.push(await makeContact(userId, { name }));
   return made;
 }
 

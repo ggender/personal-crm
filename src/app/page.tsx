@@ -10,6 +10,7 @@ import { KeepInTouchSection } from "@/components/keep-in-touch-section";
 import { ScrollIntoView } from "@/components/scroll-into-view";
 import { countContacts, listContacts, listOverdueContacts } from "@/lib/contacts";
 import { plural } from "@/lib/format";
+import { requireUser } from "@/lib/current-user";
 import { listGroups } from "@/lib/groups";
 import {
   type EmptyListMessage,
@@ -36,20 +37,21 @@ function groupByLetter(items: ContactListItem[]) {
 }
 
 export default async function ContactsPage({ searchParams }: PageProps<"/">) {
+  const user = await requireUser();
   const { q, added, group } = await searchParams;
   const query = typeof q === "string" ? q.trim() : "";
   const addedId = typeof added === "string" ? Number(added) : null;
 
   // The groups come first: they tell whether `?group=` is still a group that exists.
-  const groups = await listGroups();
+  const groups = await listGroups(user.id);
   const filter = resolveGroupFilter(group, groups);
 
   // The "Пора связаться" block is hidden while searching, so it is not even queried then.
   // It ignores the group filter: everyone overdue is in it.
   const [items, total, overdue] = await Promise.all([
-    listContacts(query, filter),
-    countContacts(filter),
-    query ? [] : listOverdueContacts(),
+    listContacts(user.id, query, filter),
+    countContacts(user.id, filter),
+    query ? [] : listOverdueContacts(user.id),
   ]);
   const addedContact = addedId ? items.find((item) => item.id === addedId) : undefined;
 

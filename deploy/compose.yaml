@@ -7,10 +7,12 @@ x-logging: &logging
     max-size: 10m
     max-file: "3"
 
+x-app-environment: &app-environment
+  DATABASE_URL: postgres://crm:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set in .env}@db:5432/crm
+
 x-app: &app
   image: ${APP_IMAGE:?APP_IMAGE is not set - run through deploy.sh or compose.sh}
-  environment:
-    DATABASE_URL: postgres://crm:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set in .env}@db:5432/crm
+  environment: *app-environment
   depends_on:
     db:
       condition: service_healthy
@@ -37,14 +39,26 @@ services:
     logging: *logging
 
   # One-off container: applies migrations and exits. deploy.sh runs it before starting a new image.
+  # OWNER_EMAIL: the migration gives the data that already exists to the user with this email.
   migrate:
     <<: *app
+    environment:
+      <<: *app-environment
+      OWNER_EMAIL: ${OWNER_EMAIL:?OWNER_EMAIL is not set in .env}
     command: ["node", "scripts/migrate.ts"]
     restart: "no"
     profiles: [migrate]
 
+  # Login: the secret that signs the cookies and the mail server are in .env (secrets); the public
+  # address of the app (login links point to it) and the sender are not secret.
   app:
     <<: *app
+    environment:
+      <<: *app-environment
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is not set in .env}
+      BETTER_AUTH_URL: https://app.vprodcrm.ru
+      SMTP_URL: ${SMTP_URL:?SMTP_URL is not set in .env}
+      MAIL_FROM: "Личная CRM <noreply@mail.crm.vprodcrm.ru>"
     restart: unless-stopped
     ports:
       # Localhost only: the app is reached from outside through nginx on this server.

@@ -78,6 +78,18 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      # Catches the login emails: the browser tests read the links from it. Same version as in
+      # docker-compose.yml.
+      mailpit:
+        image: axllent/mailpit:v1.31.5
+        ports:
+          - 1025:1025
+          - 8025:8025
+        options: >-
+          --health-cmd "/mailpit readyz"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     env:
       E2E_DATABASE_URL: postgres://crm:crm@localhost:5432/crm_e2e_test
     steps:

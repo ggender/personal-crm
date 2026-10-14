@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getTestDatabaseUrl } from "./test-database-url.mts";
+import { signInAs } from "./shims/current-user";
 
 // The database is "down" for real: the connection string points to a port nobody listens on.
 // The server actions answer before they reach revalidatePath, so they run outside Next.js.
@@ -9,6 +10,7 @@ const closedPortUrl = new URL(testUrl);
 closedPortUrl.port = "1";
 
 beforeAll(() => {
+  signInAs("00000000-0000-4000-8000-000000000001");
   process.env.DATABASE_URL = closedPortUrl.toString();
 });
 

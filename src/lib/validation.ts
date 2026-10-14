@@ -44,6 +44,19 @@ export const noteInputSchema = z.object({
   body: z.string().trim().min(1, "Напишите текст заметки").max(5000, "Не длиннее 5000 символов"),
 });
 
+export const LOGIN_EMAIL_ERROR = "Проверьте адрес почты";
+
+/**
+ * The email on the login page: spaces at both ends are dropped and letters are made small, so
+ * "Anna@Example.com" and "anna@example.com" are one address. At most 254 characters (the limit of
+ * an email address). The server checks it itself, whatever the form did.
+ */
+export const loginEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email(LOGIN_EMAIL_ERROR).max(254, LOGIN_EMAIL_ERROR));
+
 /** A group name: 1-50 characters, spaces at both ends are dropped. */
 export const groupNameSchema = z
   .string()

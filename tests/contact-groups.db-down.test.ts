@@ -2,6 +2,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getTestDatabaseUrl } from "./test-database-url.mts";
+import { signInAs } from "./shims/current-user";
 
 // The database is "down" for real: the connection string points to a port nobody listens on.
 // The server actions answer before they reach revalidatePath, so they run outside Next.js.
@@ -20,6 +21,7 @@ async function withTestDatabase<T>(run: (client: postgres.Sql) => Promise<T>) {
 }
 
 beforeAll(async () => {
+  signInAs("00000000-0000-4000-8000-000000000001");
   // Start from no groups: other test files leave their rows behind.
   await withTestDatabase((client) => client`truncate groups restart identity cascade`);
   process.env.DATABASE_URL = closedPortUrl.toString();

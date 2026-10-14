@@ -8,21 +8,27 @@ import { ConfirmDelete } from "@/components/confirm-delete";
 import { ContactForm } from "@/components/contact-form";
 import { Button } from "@/components/ui/button";
 import { countNotes, getContact } from "@/lib/contacts";
+import { requireUser } from "@/lib/current-user";
 import { parseId } from "@/lib/validation";
 
 export async function generateMetadata({
   params,
 }: PageProps<"/contacts/[id]/edit">): Promise<Metadata> {
+  const user = await requireUser();
   const id = parseId((await params).id);
-  const contact = id ? await getContact(id) : null;
+  const contact = id ? await getContact(user.id, id) : null;
   return { title: contact ? `Изменить: ${contact.name}` : "Контакт не найден" };
 }
 
 export default async function EditContactPage({ params }: PageProps<"/contacts/[id]/edit">) {
+  const user = await requireUser();
   const id = parseId((await params).id);
   if (!id) notFound();
 
-  const [contact, notesCount] = await Promise.all([getContact(id), countNotes(id)]);
+  const [contact, notesCount] = await Promise.all([
+    getContact(user.id, id),
+    countNotes(user.id, id),
+  ]);
   if (!contact) notFound();
 
   return (

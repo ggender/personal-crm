@@ -1,12 +1,13 @@
-// Fills an empty database with realistic test contacts and notes.
+// Fills an empty database with realistic test contacts and notes. They belong to the user whose
+// email is OWNER_EMAIL (the user is created if he has not signed in yet).
 // Refuses to run when contacts already exist, so it never duplicates or overwrites data.
 import { fakerRU as faker } from "@faker-js/faker";
 import { loadEnvConfig } from "@next/env";
-import { count } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-import { contacts, notes } from "../src/db/schema";
+import { contacts, notes, users } from "../src/db/schema";
 
 loadEnvConfig(process.cwd());
 
@@ -378,6 +379,18 @@ function phone(): string {
   return `+7 9${n()}${n()} ${faker.string.numeric(3)}-${faker.string.numeric(2)}-${faker.string.numeric(2)}`;
 }
 
+// Same rule as the data migration (drizzle/0004_data_owner.sql): spaces and capitals do not count.
+function ownerEmailFromEnv() {
+  const email = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    throw new Error(
+      "OWNER_EMAIL is not set or is not an email address: the demo contacts need an owner. " +
+        "Write your email after OWNER_EMAIL= in .env.",
+    );
+  }
+  return email;
+}
+
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set. Run `pnpm env:init` to create .env.");
@@ -391,6 +404,13 @@ async function main() {
       console.log(`Database already has ${existing} contacts - seed skipped, nothing changed.`);
       return;
     }
+
+    const ownerEmail = ownerEmailFromEnv();
+    await db.insert(users).values({ name: "", email: ownerEmail }).onConflictDoNothing();
+    const [owner] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, ownerEmail));
 
     faker.seed(2026);
     const now = new Date();
@@ -409,6 +429,7 @@ async function main() {
       contactRows.push({
         sex,
         row: {
+          userId: owner.id,
           name,
           about: faker.datatype.boolean(0.9) ? about(sex) : null,
           howWeMet: faker.datatype.boolean(0.85) ? howWeMet() : null,

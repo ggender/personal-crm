@@ -26,6 +26,7 @@ import {
   getContactTouchStatus,
   listNotes,
 } from "@/lib/contacts";
+import { requireUser } from "@/lib/current-user";
 import { formatDate, formatDateTime, formatDay, formatOverdue, plural } from "@/lib/format";
 import { getContactGroupIds, listGroups } from "@/lib/groups";
 import { cn } from "@/lib/utils";
@@ -34,21 +35,24 @@ import { parseId } from "@/lib/validation";
 const NOTE_WORDS: [string, string, string] = ["заметка", "заметки", "заметок"];
 
 export async function generateMetadata({ params }: PageProps<"/contacts/[id]">): Promise<Metadata> {
+  // The name of a contact must not reach the tab title of anyone but its owner.
+  const user = await requireUser();
   const id = parseId((await params).id);
-  const contact = id ? await getContact(id) : null;
+  const contact = id ? await getContact(user.id, id) : null;
   return { title: contact?.name ?? "Контакт не найден" };
 }
 
 export default async function ContactPage({ params }: PageProps<"/contacts/[id]">) {
+  const user = await requireUser();
   const id = parseId((await params).id);
   if (!id) notFound();
 
   const [contact, notes, touch, groups, groupIds] = await Promise.all([
-    getContact(id),
-    listNotes(id),
-    getContactTouchStatus(id),
-    listGroups(),
-    getContactGroupIds(id),
+    getContact(user.id, id),
+    listNotes(user.id, id),
+    getContactTouchStatus(user.id, id),
+    listGroups(user.id),
+    getContactGroupIds(user.id, id),
   ]);
   if (!contact || !touch) notFound();
 

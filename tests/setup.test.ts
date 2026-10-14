@@ -1,6 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { assertTestDatabaseUrl, closeDb, makeContact, resetDb, rowCount } from "./helpers/db";
+import {
+  assertTestDatabaseUrl,
+  closeDb,
+  makeContact,
+  makeUser,
+  resetDb,
+  rowCount,
+} from "./helpers/db";
 
 describe("test database helpers", () => {
   afterAll(closeDb);
@@ -16,7 +23,8 @@ describe("test database helpers", () => {
   });
 
   it("leaves contacts and notes empty after a reset", async () => {
-    await makeContact({ name: "Иван Петров" });
+    const user = await makeUser();
+    await makeContact(user.id, { name: "Иван Петров" });
     expect(await rowCount("contacts")).toBe(1);
 
     await resetDb();
