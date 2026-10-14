@@ -18,9 +18,11 @@ ssh_opts=(-i "$ssh_dir/key" -o IdentitiesOnly=yes -o BatchMode=yes
   -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$ssh_dir/known_hosts")
 target="$DEPLOY_USER@$DEPLOY_HOST"
 
-echo "==> Copying deploy files to $target:$APP_DIR"
-scp -p "${ssh_opts[@]}" "$here/compose.yaml" "$here/compose.sh" "$here/deploy.sh" \
-  "$here/.env.example" "$target:$APP_DIR/"
+# The whole deploy/ folder goes to the server, so a new script there needs no change here.
+# Server-only files (.env, release.env, backups/) are not in deploy/ and stay untouched;
+# --no-overwrite-dir keeps the mode of the app folder itself.
+echo "==> Copying deploy/ to $target:$APP_DIR"
+tar -C "$here" -cf - . | ssh "${ssh_opts[@]}" "$target" "tar -C $APP_DIR --no-overwrite-dir -xf -"
 
 echo "==> Running deploy.sh on the server"
 printf '%s' "$GHCR_TOKEN" | ssh "${ssh_opts[@]}" "$target" "$APP_DIR/deploy.sh '$APP_IMAGE' '$GHCR_USER'"
