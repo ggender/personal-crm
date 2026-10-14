@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Deploys one image of the app on this server: pull -> migrations -> new app container -> smoke /health.
-# After a green smoke only the current and the previous image are kept.
+# Deploys one image of the app on this server:
+# database backup -> pull -> migrations -> new app container -> smoke /health.
+# After a green smoke only the current and the previous image and the newest backups are kept.
 #
 # Called by CI through deploy/ship.sh, which pipes a short-lived GHCR token on stdin:
 #   deploy.sh <image:tag> <registry-user>
@@ -15,6 +16,7 @@ REGISTRY_USER="${2:-}"
 TAG="${IMAGE##*:}"
 REPO="${IMAGE%:*}"
 HEALTH_URL="http://127.0.0.1:3000/health"
+KEEP_BACKUPS=10
 
 cd "$(dirname "$0")"
 compose() { ./compose.sh "$@"; }
@@ -30,6 +32,19 @@ fi
 current="$(release_value APP_IMAGE)"
 previous="$(release_value PREVIOUS_IMAGE)"
 if [[ -n "$current" && "$current" != "$IMAGE" ]]; then previous="$current"; fi
+
+# Shell variables win over release.env, so compose uses the image being deployed.
+export APP_IMAGE="$IMAGE"
+
+step "Starting the database"
+# stdin keeps the registry token for the pull below: steps before it must not read it.
+compose up -d --wait --quiet-pull db < /dev/null
+
+# The backup is named after the version that ran before this deploy ("none" on the very first one).
+version_before="none"
+if [[ -n "$current" ]]; then version_before="${current##*:}"; fi
+step "Backing up the database (app version before this deploy: $version_before)"
+./backup.sh "$version_before"
 
 if docker image inspect "$IMAGE" >/dev/null 2>&1; then
   step "Image $IMAGE is already on the server"
@@ -47,12 +62,6 @@ else
   fi
   DOCKER_CONFIG="$docker_config" docker pull --quiet "$IMAGE"
 fi
-
-# Shell variables win over release.env, so compose uses the image being deployed.
-export APP_IMAGE="$IMAGE"
-
-step "Starting the database"
-compose up -d --wait --quiet-pull db
 
 step "Applying migrations (one-off container)"
 compose run --rm --no-deps -T migrate
@@ -80,5 +89,12 @@ docker image ls "$REPO" --format '{{.Repository}}:{{.Tag}}' | while read -r ref;
   [[ "$ref" == "$IMAGE" || "$ref" == "$previous" || "$ref" == *:"<none>" ]] && continue
   docker image rm "$ref" >/dev/null && echo "removed $ref" || echo "could not remove $ref" >&2
 done
+
+step "Removing old backups (keeping the newest $KEEP_BACKUPS)"
+# Names start with the date and time, so the name order is the age order.
+find backups -maxdepth 1 -name 'crm_*.dump' | sort -r | tail -n +$((KEEP_BACKUPS + 1)) |
+  while read -r old; do
+    rm -f -- "$old" && echo "removed $old"
+  done
 
 step "Deployed $IMAGE"
