@@ -1,6 +1,17 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gt, isNotNull, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  gt,
+  isNotNull,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { connection } from "next/server";
 
 import { getDb } from "@/db";
@@ -13,6 +24,13 @@ const normalizeForSearch = (value: string) => value.toLowerCase().replaceAll("ё
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 const byName = sql`${contacts.name} collate ${sql.identifier(RU_COLLATION)}`;
+
+/*
+ * Every function here takes the user as its first parameter and touches only that user's contacts
+ * and the notes of those contacts. A record of someone else answers exactly like one that does not
+ * exist (null, false, empty), so nobody can tell from the answer that it exists. TypeScript does
+ * not let a call without `userId` compile.
+ */
 
 /*
  * Keep in touch: one set of expressions for the home page block and the contact card.
@@ -62,12 +80,12 @@ function groupCondition(filter: GroupFilter) {
 const groupLabelsQuery = sql`array(
   select ${groups.name} from ${groupMembers}
   inner join ${groups} on ${groups.id} = ${groupMembers.groupId}
-  where ${groupMembers.contactId} = ${contacts.id}
+  where ${groupMembers.contactId} = ${contacts.id} and ${groups.userId} = ${contacts.userId}
   order by ${groups.name} collate ${sql.identifier(RU_COLLATION)}, ${groups.id}
 )`;
 const groupLabels = sql<string[]>`${groupLabelsQuery}`;
 
-export async function listContacts(query: string, filter: GroupFilter) {
+export async function listContacts(userId: string, query: string, filter: GroupFilter) {
   await connection();
   const words = normalizeForSearch(query).split(/\s+/).filter(Boolean);
   // Every word must appear in the name, in any order: "петров иван" finds "Иван Петров".
@@ -84,12 +102,12 @@ export async function listContacts(query: string, filter: GroupFilter) {
       groups: groupLabels,
     })
     .from(contacts)
-    .where(and(...conditions, groupCondition(filter)))
+    .where(and(eq(contacts.userId, userId), ...conditions, groupCondition(filter)))
     .orderBy(byName, asc(contacts.id));
 }
 
 /** Contacts not reached for longer than their frequency: the most overdue first, then by name. */
-export async function listOverdueContacts() {
+export async function listOverdueContacts(userId: string) {
   await connection();
   return getDb()
     .select({
@@ -99,7 +117,9 @@ export async function listOverdueContacts() {
       overdueDays: sql<number>`${overdueDays}`.mapWith(Number),
     })
     .from(contacts)
-    .where(and(isNotNull(contacts.contactFrequency), gt(overdueDays, 0)))
+    .where(
+      and(eq(contacts.userId, userId), isNotNull(contacts.contactFrequency), gt(overdueDays, 0)),
+    )
     .orderBy(desc(overdueDays), byName, asc(contacts.id));
 }
 
@@ -114,7 +134,10 @@ export type ContactTouchStatus =
     };
 
 /** Returns null when the contact does not exist. */
-export async function getContactTouchStatus(contactId: number): Promise<ContactTouchStatus | null> {
+export async function getContactTouchStatus(
+  userId: string,
+  contactId: number,
+): Promise<ContactTouchStatus | null> {
   await connection();
   const [row] = await getDb()
     .select({
@@ -123,49 +146,58 @@ export async function getContactTouchStatus(contactId: number): Promise<ContactT
       overdueDays,
     })
     .from(contacts)
-    .where(eq(contacts.id, contactId));
+    .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)));
   if (!row) return null;
   if (!row.frequency || row.dueDate === null || row.overdueDays === null)
     return { frequency: null };
   return { frequency: row.frequency, dueDate: row.dueDate, overdueDays: row.overdueDays };
 }
 
-export async function countContacts(filter: GroupFilter) {
+export async function countContacts(userId: string, filter: GroupFilter) {
   await connection();
   const [{ value }] = await getDb()
     .select({ value: count() })
     .from(contacts)
-    .where(groupCondition(filter));
+    .where(and(eq(contacts.userId, userId), groupCondition(filter)));
   return value;
 }
 
-export async function getContact(id: number) {
+export async function getContact(userId: string, id: number) {
   await connection();
-  const [contact] = await getDb().select().from(contacts).where(eq(contacts.id, id));
+  const [contact] = await getDb()
+    .select()
+    .from(contacts)
+    .where(and(eq(contacts.id, id), eq(contacts.userId, userId)));
   return contact ?? null;
 }
 
-export async function countNotes(contactId: number) {
+// A note belongs to the owner of its contact: the join is the check.
+export async function countNotes(userId: string, contactId: number) {
   await connection();
   const [{ value }] = await getDb()
     .select({ value: count() })
     .from(notes)
-    .where(eq(notes.contactId, contactId));
+    .innerJoin(contacts, eq(contacts.id, notes.contactId))
+    .where(and(eq(notes.contactId, contactId), eq(contacts.userId, userId)));
   return value;
 }
 
-export async function listNotes(contactId: number) {
+export async function listNotes(userId: string, contactId: number) {
   await connection();
   return getDb()
-    .select()
+    .select(getTableColumns(notes))
     .from(notes)
-    .where(eq(notes.contactId, contactId))
+    .innerJoin(contacts, eq(contacts.id, notes.contactId))
+    .where(and(eq(notes.contactId, contactId), eq(contacts.userId, userId)))
     .orderBy(desc(notes.createdAt), desc(notes.id));
 }
 
-export async function createContact({ firstNote, ...fields }: ContactInput) {
+export async function createContact(userId: string, { firstNote, ...fields }: ContactInput) {
   return getDb().transaction(async (tx) => {
-    const [{ id }] = await tx.insert(contacts).values(fields).returning({ id: contacts.id });
+    const [{ id }] = await tx
+      .insert(contacts)
+      .values({ ...fields, userId })
+      .returning({ id: contacts.id });
     if (firstNote) {
       await tx.insert(notes).values({ contactId: id, body: firstNote });
     }
@@ -174,12 +206,12 @@ export async function createContact({ firstNote, ...fields }: ContactInput) {
 }
 
 /** Returns false when the contact does not exist. */
-export async function addNote(contactId: number, body: string) {
+export async function addNote(userId: string, contactId: number, body: string) {
   return getDb().transaction(async (tx) => {
     const updated = await tx
       .update(contacts)
       .set({ updatedAt: sql`now()` })
-      .where(eq(contacts.id, contactId))
+      .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)))
       .returning({ id: contacts.id });
     if (updated.length === 0) return false;
     await tx.insert(notes).values({ contactId, body });
@@ -188,11 +220,11 @@ export async function addNote(contactId: number, body: string) {
 }
 
 /** Returns false when the contact does not exist. */
-export async function updateContact(id: number, fields: ContactUpdate) {
+export async function updateContact(userId: string, id: number, fields: ContactUpdate) {
   const updated = await getDb()
     .update(contacts)
     .set({ ...fields, updatedAt: sql`now()` })
-    .where(eq(contacts.id, id))
+    .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
     .returning({ id: contacts.id });
   return updated.length > 0;
 }
@@ -201,20 +233,24 @@ export async function updateContact(id: number, fields: ContactUpdate) {
  * Deletes the contact together with its notes (the foreign key cascades).
  * Returns false when the contact does not exist.
  */
-export async function deleteContact(id: number) {
+export async function deleteContact(userId: string, id: number) {
   const deleted = await getDb()
     .delete(contacts)
-    .where(eq(contacts.id, id))
+    .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
     .returning({ id: contacts.id });
   return deleted.length > 0;
 }
 
 /** Returns false when the contact does not exist. */
-export async function setContactFrequency(contactId: number, frequency: ContactFrequency | null) {
+export async function setContactFrequency(
+  userId: string,
+  contactId: number,
+  frequency: ContactFrequency | null,
+) {
   const updated = await getDb()
     .update(contacts)
     .set({ contactFrequency: frequency, updatedAt: sql`now()` })
-    .where(eq(contacts.id, contactId))
+    .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)))
     .returning({ id: contacts.id });
   return updated.length > 0;
 }
@@ -224,19 +260,19 @@ export async function setContactFrequency(contactId: number, frequency: ContactF
  * data did not change. Returns the previous and the new mark for undo, or null when the contact
  * does not exist.
  */
-export async function markContacted(contactId: number) {
+export async function markContacted(userId: string, contactId: number) {
   return getDb().transaction(async (tx) => {
     const [current] = await tx
       .select({ lastContactedAt: contacts.lastContactedAt })
       .from(contacts)
-      .where(eq(contacts.id, contactId))
+      .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)))
       .for("update");
     if (!current) return null;
     // Millisecond precision, so the mark survives the round trip through a JS Date for undo.
     const [{ marked }] = await tx
       .update(contacts)
       .set({ lastContactedAt: sql`date_trunc('milliseconds', now())` })
-      .where(eq(contacts.id, contactId))
+      .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)))
       .returning({ marked: contacts.lastContactedAt });
     return { previous: current.lastContactedAt, marked: marked! };
   });
@@ -247,28 +283,44 @@ export async function markContacted(contactId: number) {
  * mark that press set: a later press, e.g. in another tab, is not overwritten.
  * Returns false when nothing was restored.
  */
-export async function undoContacted(contactId: number, previous: Date | null, marked: Date) {
+export async function undoContacted(
+  userId: string,
+  contactId: number,
+  previous: Date | null,
+  marked: Date,
+) {
   const updated = await getDb()
     .update(contacts)
     .set({ lastContactedAt: previous })
-    .where(and(eq(contacts.id, contactId), eq(contacts.lastContactedAt, marked)))
+    .where(
+      and(
+        eq(contacts.id, contactId),
+        eq(contacts.userId, userId),
+        eq(contacts.lastContactedAt, marked),
+      ),
+    )
     .returning({ id: contacts.id });
   return updated.length > 0;
 }
 
 /** Returns false when the note does not exist or belongs to another contact. */
-export async function updateNote(contactId: number, noteId: number, body: string) {
+export async function updateNote(userId: string, contactId: number, noteId: number, body: string) {
   return getDb().transaction(async (tx) => {
+    // The note is the user's only if its contact is.
+    const ownContact = sql`exists (
+      select 1 from ${contacts}
+      where ${contacts.id} = ${notes.contactId} and ${contacts.userId} = ${userId}
+    )`;
     const updated = await tx
       .update(notes)
       .set({ body })
-      .where(and(eq(notes.id, noteId), eq(notes.contactId, contactId)))
+      .where(and(eq(notes.id, noteId), eq(notes.contactId, contactId), ownContact))
       .returning({ id: notes.id });
     if (updated.length === 0) return false;
     await tx
       .update(contacts)
       .set({ updatedAt: sql`now()` })
-      .where(eq(contacts.id, contactId));
+      .where(and(eq(contacts.id, contactId), eq(contacts.userId, userId)));
     return true;
   });
 }

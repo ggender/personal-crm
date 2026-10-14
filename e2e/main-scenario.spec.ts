@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { signIn, signInNewUser } from "./helpers/auth";
 import { closeDb, makeContacts, resetDb } from "./helpers/db";
 
 /*
@@ -12,10 +13,7 @@ const EXISTING = ["Анна Смирнова", "Борис Орлов"];
 const NEW_NAME = "Вера Кузнецова";
 const NOTE = "Договорились созвониться в пятницу и обсудить поездку";
 
-test.beforeEach(async () => {
-  await resetDb();
-  await makeContacts(EXISTING);
-});
+test.beforeEach(resetDb);
 
 test.afterAll(closeDb);
 
@@ -27,6 +25,11 @@ test("open, add, find, write a note, see the same data in another browser", asyn
   page,
   browser,
 }) => {
+  // Before the scenario: log in, and the people he already has. The same person logs in again in
+  // the second browser at the end.
+  const { email, userId } = await signInNewUser(page, "owner");
+  await makeContacts(userId, EXISTING);
+
   // 1. Open: all contacts are listed.
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Контакты", level: 1 })).toBeVisible();
@@ -66,6 +69,7 @@ test("open, add, find, write a note, see the same data in another browser", asyn
   const otherBrowser = await browser.newContext();
   try {
     const other = await otherBrowser.newPage();
+    await signIn(other, email);
     await other.goto("/");
     await expect(other.getByText("3 контакта")).toBeVisible();
     for (const name of [...EXISTING, NEW_NAME])

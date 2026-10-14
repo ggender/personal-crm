@@ -3,10 +3,12 @@ import type { Metadata } from "next";
 import { createContactAction } from "@/app/actions";
 import { BackLink } from "@/components/back-link";
 import { ContactForm } from "@/components/contact-form";
+import { requireUser } from "@/lib/current-user";
 
 export const metadata: Metadata = { title: "Новый контакт" };
 
 export default async function NewContactPage({ searchParams }: PageProps<"/contacts/new">) {
+  await requireUser();
   const { name } = await searchParams;
 
   return (

@@ -9,6 +9,7 @@ import {
   moscowToday,
   ruDay,
 } from "../tests/helpers/days";
+import { signIn, signInNewUser } from "./helpers/auth";
 import { closeDb, makeContact, makeNote, resetDb } from "./helpers/db";
 
 /*
@@ -26,11 +27,12 @@ test.afterAll(closeDb);
 
 /** A contact whose only note was written `days` days ago. */
 async function contactWithNote(
+  userId: string,
   name: string,
   frequency: Parameters<typeof makeContact>[0]["frequency"],
   days: number,
 ) {
-  const id = await makeContact({ name, frequency, createdAt: daysAgo(days) });
+  const id = await makeContact({ userId, name, frequency, createdAt: daysAgo(days) });
   await makeNote(id, daysAgo(days));
   return id;
 }
@@ -57,7 +59,8 @@ const blockRow = (page: Page, name: string) =>
   keepInTouch(page).getByRole("listitem").filter({ hasText: name });
 
 test("set a frequency and mark a conversation on the contact page", async ({ page, browser }) => {
-  const id = await contactWithNote("Анна Смирнова", null, 10);
+  const { email, userId } = await signInNewUser(page, "owner");
+  const id = await contactWithNote(userId, "Анна Смирнова", null, 10);
   const inAWeek = `Связаться не позже ${ruDay(addDays(moscowToday(), 7))}`;
   const overdueBy3 = `Пора связаться: ${overdue(3)}`;
 
@@ -78,6 +81,7 @@ test("set a frequency and mark a conversation on the contact page", async ({ pag
   const otherBrowser = await browser.newContext();
   try {
     const other = await otherBrowser.newPage();
+    await signIn(other, email);
     await other.goto(`/contacts/${id}`);
     await expect(frequency(other, "Раз в неделю")).toBeChecked();
     await expect(other.getByText(overdueBy3)).toBeVisible();
@@ -109,11 +113,12 @@ test("set a frequency and mark a conversation on the contact page", async ({ pag
 });
 
 test("work through the «Пора связаться» block on the home page", async ({ page }) => {
-  await contactWithNote("Анна Смирнова", "monthly", 42);
-  await contactWithNote("Борис Орлов", "weekly", 10);
-  await contactWithNote("Вера Кузнецова", "yearly", 400);
-  await contactWithNote("Глеб Ершов", null, 400);
-  await contactWithNote("Дарья Ли", "weekly", 2);
+  const { userId } = await signInNewUser(page, "owner");
+  await contactWithNote(userId, "Анна Смирнова", "monthly", 42);
+  await contactWithNote(userId, "Борис Орлов", "weekly", 10);
+  await contactWithNote(userId, "Вера Кузнецова", "yearly", 400);
+  await contactWithNote(userId, "Глеб Ершов", null, 400);
+  await contactWithNote(userId, "Дарья Ли", "weekly", 2);
 
   // Three overdue contacts, the most overdue first; no frequency or not due yet — not in the block.
   await page.goto("/");
@@ -176,8 +181,9 @@ test("work through the «Пора связаться» block on the home page", 
 });
 
 test("the block goes away once the last overdue contact is marked", async ({ page }) => {
-  await contactWithNote("Борис Орлов", "weekly", 10);
-  await makeContact({ name: "Анна Смирнова" });
+  const { userId } = await signInNewUser(page, "owner");
+  await contactWithNote(userId, "Борис Орлов", "weekly", 10);
+  await makeContact({ userId, name: "Анна Смирнова" });
 
   await page.goto("/");
   await blockRow(page, "Борис Орлов").getByRole("button", { name: "Пообщались" }).click();

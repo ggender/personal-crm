@@ -4,12 +4,14 @@ import { createGroupAction, deleteGroupAction, renameGroupAction } from "@/app/a
 import { BackLink } from "@/components/back-link";
 import { GroupNameForm } from "@/components/group-name-form";
 import { GroupRow } from "@/components/group-row";
+import { requireUser } from "@/lib/current-user";
 import { listGroups } from "@/lib/groups";
 
 export const metadata: Metadata = { title: "Группы" };
 
 export default async function GroupsPage() {
-  const groups = await listGroups();
+  const user = await requireUser();
+  const groups = await listGroups(user.id);
 
   return (
     <main className="page-container pt-4 pb-16">

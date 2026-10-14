@@ -17,7 +17,7 @@ import { formatDay, formatOverdue } from "@/lib/format";
 import { CONTACT_FREQUENCY_LABELS, type ContactFrequency } from "@/lib/keep-in-touch";
 import { contactInputSchema, contactUpdateSchema } from "@/lib/validation";
 
-import { closeDb, makeContact, makeNote, resetDb } from "./helpers/db";
+import { closeDb, makeContact, makeNote, makeUser, resetDb } from "./helpers/db";
 import {
   addDays,
   addMonths,
@@ -31,11 +31,12 @@ import {
 /** The fields of the "Новый контакт" form left empty. */
 const emptyForm = { about: "", howWeMet: "", phone: "", email: "", firstNote: "" };
 
-const overdueNames = async () => (await listOverdueContacts()).map((contact) => contact.name);
+const overdueNames = async () =>
+  (await listOverdueContacts(owner.id)).map((contact) => contact.name);
 
 /** What the contact page says under the frequency, or null when it says nothing. */
 async function touchText(contactId: number) {
-  const status = await getContactTouchStatus(contactId);
+  const status = await getContactTouchStatus(owner.id, contactId);
   if (!status?.frequency) return null;
   return status.overdueDays > 0
     ? `Пора связаться: ${formatOverdue(status.overdueDays)}`
@@ -44,7 +45,7 @@ async function touchText(contactId: number) {
 
 /** The last day to get in touch, "YYYY-MM-DD"; null without a frequency. */
 async function dueDateOf(contactId: number) {
-  const status = await getContactTouchStatus(contactId);
+  const status = await getContactTouchStatus(owner.id, contactId);
   return status?.frequency ? status.dueDate : null;
 }
 
@@ -54,7 +55,7 @@ const rowText = (row: { frequency: ContactFrequency; overdueDays: number }) =>
 
 /** A contact with the given frequency whose only note was written `days` days ago. */
 async function contactWithNote(name: string, frequency: ContactFrequency | null, days: number) {
-  const contact = await makeContact({
+  const contact = await makeContact(owner.id, {
     name,
     contactFrequency: frequency,
     createdAt: daysAgo(days),
@@ -63,34 +64,42 @@ async function contactWithNote(name: string, frequency: ContactFrequency | null,
   return { id: contact.id, noteId: note.id };
 }
 
-beforeEach(resetDb);
+// Every test starts with an empty database and one user whose data it works with.
+let owner: Awaited<ReturnType<typeof makeUser>>;
+beforeEach(async () => {
+  await resetDb();
+  owner = await makeUser();
+});
 afterAll(closeDb);
 
 describe("Частота общения задаётся на странице контакта", () => {
   it("У нового контакта частота не задана", async () => {
-    const id = await createContact(contactInputSchema.parse({ ...emptyForm, name: "Анна" }));
+    const id = await createContact(
+      owner.id,
+      contactInputSchema.parse({ ...emptyForm, name: "Анна" }),
+    );
 
-    expect(await getContactTouchStatus(id)).toEqual({ frequency: null });
+    expect(await getContactTouchStatus(owner.id, id)).toEqual({ frequency: null });
     expect(await touchText(id)).toBeNull();
   });
 
   it("Выбор сохраняется сразу", async () => {
-    const { id } = await makeContact({ name: "Анна" });
+    const { id } = await makeContact(owner.id, { name: "Анна" });
 
-    expect(await setContactFrequency(id, "monthly")).toBe(true);
+    expect(await setContactFrequency(owner.id, id, "monthly")).toBe(true);
 
     // A fresh read is what a reload or another browser gets.
-    expect((await getContactTouchStatus(id))?.frequency).toBe("monthly");
+    expect((await getContactTouchStatus(owner.id, id))?.frequency).toBe("monthly");
   });
 
   it("Сброс частоты", async () => {
     const { id } = await contactWithNote("Анна", "weekly", 10);
     expect(await overdueNames()).toEqual(["Анна"]);
 
-    await setContactFrequency(id, null);
+    await setContactFrequency(owner.id, id, null);
 
     expect(await overdueNames()).toEqual([]);
-    expect(await getContactTouchStatus(id)).toEqual({ frequency: null });
+    expect(await getContactTouchStatus(owner.id, id)).toEqual({ frequency: null });
     expect(await touchText(id)).toBeNull();
   });
 
@@ -108,10 +117,10 @@ describe("Дата последнего общения", () => {
     const { id } = await contactWithNote("Анна", "weekly", 10);
     expect(await overdueNames()).toEqual(["Анна"]);
 
-    await addNote(id, "Встретились на даче");
+    await addNote(owner.id, id, "Встретились на даче");
 
     expect(await overdueNames()).toEqual([]);
-    expect(await getContactTouchStatus(id)).toMatchObject({
+    expect(await getContactTouchStatus(owner.id, id)).toMatchObject({
       dueDate: addDays(moscowToday(), 7),
       overdueDays: -7,
     });
@@ -120,20 +129,20 @@ describe("Дата последнего общения", () => {
   it("Отметка позже заметки", async () => {
     const { id } = await contactWithNote("Анна", "weekly", 20);
 
-    await markContacted(id);
+    await markContacted(owner.id, id);
 
     expect(await dueDateOf(id)).toBe(addDays(moscowToday(), 7));
-    expect(await countNotes(id)).toBe(1);
+    expect(await countNotes(owner.id, id)).toBe(1);
   });
 
   it("Нет заметок и отметок — срок от даты добавления", async () => {
     const createdAt = daysAgo(45);
-    const { id } = await makeContact({ name: "Анна", createdAt });
+    const { id } = await makeContact(owner.id, { name: "Анна", createdAt });
 
-    await setContactFrequency(id, "monthly");
+    await setContactFrequency(owner.id, id, "monthly");
 
     const due = addMonths(moscowDay(createdAt), 1);
-    const [row] = await listOverdueContacts();
+    const [row] = await listOverdueContacts(owner.id);
     expect(row).toMatchObject({ id, overdueDays: daysBetween(due, moscowToday()) });
     expect(row.overdueDays).toBeGreaterThan(0);
   });
@@ -141,21 +150,22 @@ describe("Дата последнего общения", () => {
   it("Правка старой заметки не сбрасывает срок", async () => {
     const { id, noteId } = await contactWithNote("Анна", "weekly", 12);
     await makeNote(id, daysAgo(10));
-    const [before] = await listOverdueContacts();
+    const [before] = await listOverdueContacts(owner.id);
     expect(before.overdueDays).toBe(3);
 
-    expect(await updateNote(id, noteId, "Исправленный текст")).toBe(true);
+    expect(await updateNote(owner.id, id, noteId, "Исправленный текст")).toBe(true);
 
-    const [after] = await listOverdueContacts();
+    const [after] = await listOverdueContacts(owner.id);
     expect(after).toMatchObject({ id, overdueDays: 3 });
   });
 
   it("Заметка при добавлении контакта считается общением", async () => {
     const id = await createContact(
+      owner.id,
       contactInputSchema.parse({ ...emptyForm, name: "Анна", firstNote: "Познакомились" }),
     );
 
-    await setContactFrequency(id, "weekly");
+    await setContactFrequency(owner.id, id, "weekly");
 
     expect(await touchText(id)).toBe(`Связаться не позже ${formatDay(addDays(moscowToday(), 7))}`);
   });
@@ -166,18 +176,18 @@ describe("Срок и просрочка", () => {
     const { id } = await contactWithNote("Анна", "monthly", 5);
 
     const due = addMonths(moscowDay(daysAgo(5)), 1);
-    expect(await getContactTouchStatus(id)).toMatchObject({ dueDate: due });
+    expect(await getContactTouchStatus(owner.id, id)).toMatchObject({ dueDate: due });
     expect(await touchText(id)).toBe(`Связаться не позже ${formatDay(due)}`);
     expect(await overdueNames()).toEqual([]);
   });
 
   it("Последний день срока — ещё не просрочен", async () => {
-    const { id } = await makeContact({ name: "Анна", createdAt: daysAgo(30) });
+    const { id } = await makeContact(owner.id, { name: "Анна", createdAt: daysAgo(30) });
     await makeNote(id, moscowNoon(addDays(moscowToday(), -7)));
 
-    await setContactFrequency(id, "weekly");
+    await setContactFrequency(owner.id, id, "weekly");
 
-    expect(await getContactTouchStatus(id)).toMatchObject({
+    expect(await getContactTouchStatus(owner.id, id)).toMatchObject({
       dueDate: moscowToday(),
       overdueDays: 0,
     });
@@ -188,10 +198,10 @@ describe("Срок и просрочка", () => {
   it("Срок прошёл", async () => {
     const { id } = await contactWithNote("Анна", null, 10);
 
-    await setContactFrequency(id, "weekly");
+    await setContactFrequency(owner.id, id, "weekly");
 
     expect(await touchText(id)).toBe("Пора связаться: просрочено на 3 дня");
-    const [row] = await listOverdueContacts();
+    const [row] = await listOverdueContacts(owner.id);
     expect(row.name).toBe("Анна");
     expect(rowText(row)).toBe("Раз в неделю · просрочено на 3 дня");
   });
@@ -200,10 +210,10 @@ describe("Срок и просрочка", () => {
     const { id } = await contactWithNote("Анна", "quarterly", 40);
     expect(await overdueNames()).toEqual([]);
 
-    await setContactFrequency(id, "monthly");
+    await setContactFrequency(owner.id, id, "monthly");
 
     const due = addMonths(moscowDay(daysAgo(40)), 1);
-    const [row] = await listOverdueContacts();
+    const [row] = await listOverdueContacts(owner.id);
     expect(row).toMatchObject({ id, overdueDays: daysBetween(due, moscowToday()) });
     expect(row.overdueDays).toBeGreaterThanOrEqual(9);
     expect(row.overdueDays).toBeLessThanOrEqual(12);
@@ -211,7 +221,7 @@ describe("Срок и просрочка", () => {
 
   // Fixed past dates: the due date does not depend on today.
   const dueDateAfter = async (lastContact: Date, frequency: ContactFrequency) => {
-    const { id } = await makeContact({
+    const { id } = await makeContact(owner.id, {
       name: "Анна",
       contactFrequency: frequency,
       createdAt: lastContact,
@@ -241,10 +251,10 @@ describe("Кнопка «Пообщались»", () => {
     const { id } = await contactWithNote("Анна", "weekly", 17);
     expect(await touchText(id)).toBe("Пора связаться: просрочено на 10 дней");
 
-    await markContacted(id);
+    await markContacted(owner.id, id);
 
     expect(await touchText(id)).toBe(`Связаться не позже ${formatDay(addDays(moscowToday(), 7))}`);
-    expect(await countNotes(id)).toBe(1);
+    expect(await countNotes(owner.id, id)).toBe(1);
     expect(await overdueNames()).toEqual([]);
   });
 
@@ -252,7 +262,7 @@ describe("Кнопка «Пообщались»", () => {
     const { id } = await contactWithNote("Анна", "monthly", 13);
     expect(await dueDateOf(id)).toBe(addMonths(moscowDay(daysAgo(13)), 1));
 
-    await markContacted(id);
+    await markContacted(owner.id, id);
 
     expect(await dueDateOf(id)).toBe(addMonths(moscowToday(), 1));
   });
@@ -260,11 +270,11 @@ describe("Кнопка «Пообщались»", () => {
   it("Отметка сохраняется", async () => {
     const { id } = await contactWithNote("Анна", "weekly", 17);
 
-    const mark = await markContacted(id);
+    const mark = await markContacted(owner.id, id);
     const right = await touchText(id);
 
     expect(mark).toEqual({ previous: null, marked: expect.any(Date) });
-    expect((await getContact(id))?.lastContactedAt).toEqual(mark!.marked);
+    expect((await getContact(owner.id, id))?.lastContactedAt).toEqual(mark!.marked);
     expect(await touchText(id)).toBe(right);
   });
 
@@ -272,65 +282,65 @@ describe("Кнопка «Пообщались»", () => {
     const { id } = await contactWithNote("Анна", "weekly", 10);
     expect(await overdueNames()).toEqual(["Анна"]);
 
-    await markContacted(id);
+    await markContacted(owner.id, id);
 
-    expect(await listOverdueContacts()).toEqual([]);
+    expect(await listOverdueContacts(owner.id)).toEqual([]);
   });
 
   it("Несуществующий контакт", async () => {
-    expect(await markContacted(999)).toBeNull();
+    expect(await markContacted(owner.id, 999)).toBeNull();
   });
 });
 
 describe("Отмена отметки «Пообщались»", () => {
   it("Отмена возвращает прежнюю просрочку", async () => {
     const { id } = await contactWithNote("Анна", "weekly", 10);
-    const mark = await markContacted(id);
+    const mark = await markContacted(owner.id, id);
     expect(await overdueNames()).toEqual([]);
 
-    expect(await undoContacted(id, mark!.previous, mark!.marked)).toBe(true);
+    expect(await undoContacted(owner.id, id, mark!.previous, mark!.marked)).toBe(true);
 
-    const [row] = await listOverdueContacts();
+    const [row] = await listOverdueContacts(owner.id);
     expect(row).toMatchObject({ id, overdueDays: 3 });
     expect(await touchText(id)).toBe("Пора связаться: просрочено на 3 дня");
   });
 
   it("Отмена возвращает прежнюю отметку, а не пустоту", async () => {
     const earlier = daysAgo(17);
-    const { id } = await makeContact({
+    const { id } = await makeContact(owner.id, {
       name: "Анна",
       contactFrequency: "weekly",
       createdAt: daysAgo(60),
       lastContactedAt: earlier,
     });
-    const mark = await markContacted(id);
+    const mark = await markContacted(owner.id, id);
     expect(mark?.previous).toEqual(earlier);
 
-    await undoContacted(id, mark!.previous, mark!.marked);
+    await undoContacted(owner.id, id, mark!.previous, mark!.marked);
 
-    expect((await getContact(id))?.lastContactedAt).toEqual(earlier);
-    expect((await listOverdueContacts())[0]).toMatchObject({ id, overdueDays: 10 });
+    expect((await getContact(owner.id, id))?.lastContactedAt).toEqual(earlier);
+    expect((await listOverdueContacts(owner.id))[0]).toMatchObject({ id, overdueDays: 10 });
   });
 
   it("Время на отмену вышло: отметка осталась", async () => {
     const { id } = await contactWithNote("Анна", "weekly", 10);
-    const mark = await markContacted(id);
+    const mark = await markContacted(owner.id, id);
 
     // No undo: a later read still has the mark.
-    expect((await getContact(id))?.lastContactedAt).toEqual(mark!.marked);
+    expect((await getContact(owner.id, id))?.lastContactedAt).toEqual(mark!.marked);
     expect(await touchText(id)).toBe(`Связаться не позже ${formatDay(addDays(moscowToday(), 7))}`);
   });
 
   it("Отмена не затирает более позднее нажатие", async () => {
     const { id } = await contactWithNote("Анна", "weekly", 10);
-    const first = await markContacted(id);
+    const first = await markContacted(owner.id, id);
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const second = await markContacted(id);
+    const second = await markContacted(owner.id, id);
 
     // E.g. "Отменить" in a tab that was pressed before another tab's "Пообщались".
-    expect(await undoContacted(id, first!.previous, first!.marked)).toBe(false);
+    expect(await undoContacted(owner.id, id, first!.previous, first!.marked)).toBe(false);
 
-    expect((await getContact(id))?.lastContactedAt).toEqual(second!.marked);
+    expect((await getContact(owner.id, id))?.lastContactedAt).toEqual(second!.marked);
     expect(await overdueNames()).toEqual([]);
   });
 });
@@ -342,7 +352,7 @@ describe("Блок «Пора связаться» на главной", () => {
     await contactWithNote("Вера Кузнецова", "yearly", 400);
     await contactWithNote("Глеб Ершов", "weekly", 2);
 
-    const overdue = await listOverdueContacts();
+    const overdue = await listOverdueContacts(owner.id);
 
     const overdueSince = (days: number, months: number) =>
       daysBetween(addMonths(moscowDay(daysAgo(days)), months), moscowToday());
@@ -356,10 +366,10 @@ describe("Блок «Пора связаться» на главной", () => {
 
   it("Контакт остаётся в общем списке", async () => {
     await contactWithNote("Борис", "weekly", 10);
-    await makeContact({ name: "Анна" });
+    await makeContact(owner.id, { name: "Анна" });
 
     expect(await overdueNames()).toEqual(["Борис"]);
-    const all = (await listContacts("", { kind: "all" })).map((contact) => contact.name);
+    const all = (await listContacts(owner.id, "", { kind: "all" })).map((contact) => contact.name);
     expect(all).toEqual(["Анна", "Борис"]);
   });
 
@@ -367,7 +377,7 @@ describe("Блок «Пора связаться» на главной", () => {
     const { id } = await contactWithNote("Анна", null, 400);
 
     expect(await overdueNames()).toEqual([]);
-    expect(await getContactTouchStatus(id)).toEqual({ frequency: null });
+    expect(await getContactTouchStatus(owner.id, id)).toEqual({ frequency: null });
   });
 });
 
@@ -376,14 +386,14 @@ describe("Порядок в блоке «Пора связаться»", () => {
     await contactWithNote("Анна", "weekly", 17);
     // A year and 40 days ago: "Раз в год" overdue by 40 days.
     const lastDay = addDays(addMonths(moscowToday(), -12), -40);
-    const { id } = await makeContact({
+    const { id } = await makeContact(owner.id, {
       name: "Борис",
       contactFrequency: "yearly",
       createdAt: moscowNoon(lastDay),
     });
     await makeNote(id, moscowNoon(lastDay));
 
-    const overdue = await listOverdueContacts();
+    const overdue = await listOverdueContacts(owner.id);
 
     const yearlyOverdue = daysBetween(addMonths(lastDay, 12), moscowToday());
     expect(yearlyOverdue).toBe(40);
@@ -404,10 +414,10 @@ describe("Порядок в блоке «Пора связаться»", () => {
 describe("Когда блока «Пора связаться» нет", () => {
   it("Никто не просрочен", async () => {
     await contactWithNote("Анна", "weekly", 0);
-    await makeContact({ name: "Борис", contactFrequency: "monthly" });
+    await makeContact(owner.id, { name: "Борис", contactFrequency: "monthly" });
     await contactWithNote("Вера", null, 400);
 
-    expect(await listOverdueContacts()).toEqual([]);
+    expect(await listOverdueContacts(owner.id)).toEqual([]);
   });
 });
 

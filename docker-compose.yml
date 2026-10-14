@@ -1,4 +1,5 @@
-# Local development only: PostgreSQL for the app. Values come from .env (see .env.example).
+# Local development only: PostgreSQL for the app and Mailpit, a mail stub that catches every
+# login email. Values come from .env (see .env.example).
 services:
   db:
     image: postgres:18-alpine
@@ -14,6 +15,21 @@ services:
       - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Catches the emails the app sends: nothing leaves the computer. Emails live in memory and
+  # disappear when the container restarts. Same image version as in .github/workflows/ci.yml.
+  mailpit:
+    image: axllent/mailpit:v1.31.5
+    restart: unless-stopped
+    ports:
+      # Localhost only. 1025 - SMTP (SMTP_URL), 8025 - the page with the emails.
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
       interval: 2s
       timeout: 3s
       retries: 30
