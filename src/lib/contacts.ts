@@ -16,6 +16,7 @@ import { connection } from "next/server";
 
 import { getDb } from "@/db";
 import { contacts, groupMembers, groups, notes, RU_COLLATION } from "@/db/schema";
+import { appToday, daysUntil, nextBirthday, UPCOMING_BIRTHDAY_DAYS } from "@/lib/birthdays";
 import { APP_TIME_ZONE, CONTACT_FREQUENCIES, type ContactFrequency } from "@/lib/keep-in-touch";
 import type { ContactInput, ContactUpdate } from "@/lib/validation";
 
@@ -121,6 +122,45 @@ export async function listOverdueContacts(userId: string) {
       and(eq(contacts.userId, userId), isNotNull(contacts.contactFrequency), gt(overdueDays, 0)),
     )
     .orderBy(desc(overdueDays), byName, asc(contacts.id));
+}
+
+/**
+ * "Скоро день рождения": contacts whose birthday is today or in the next 7 days, the nearest first,
+ * then by name. The days are worked out in TypeScript (src/lib/birthdays.ts) from `today`, so a
+ * test can pick any day; the query only takes the contacts of this user that have a date.
+ */
+export async function listUpcomingBirthdays(userId: string, today: string = appToday()) {
+  await connection();
+  const rows = await getDb()
+    .select({
+      id: contacts.id,
+      name: contacts.name,
+      birthDay: sql<number>`${contacts.birthDay}`,
+      birthMonth: sql<number>`${contacts.birthMonth}`,
+      birthYear: contacts.birthYear,
+    })
+    .from(contacts)
+    .where(and(eq(contacts.userId, userId), isNotNull(contacts.birthMonth)))
+    .orderBy(byName, asc(contacts.id));
+
+  return (
+    rows
+      .map((row) => {
+        const next = nextBirthday(row.birthMonth, row.birthDay, today);
+        return {
+          id: row.id,
+          name: row.name,
+          /** The day of the birthday, "YYYY-MM-DD". */
+          next,
+          daysUntil: daysUntil(next, today),
+          /** The age on that day; null when the year of birth is unknown. */
+          turningAge: row.birthYear === null ? null : Number(next.slice(0, 4)) - row.birthYear,
+        };
+      })
+      .filter((row) => row.daysUntil <= UPCOMING_BIRTHDAY_DAYS)
+      // A stable sort: within one day the order by name from the query stays.
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+  );
 }
 
 export type ContactTouchStatus =

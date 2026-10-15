@@ -43,6 +43,9 @@ export default async function EditContactPage({ params }: PageProps<"/contacts/[
           howWeMet: contact.howWeMet ?? "",
           phone: contact.phone ?? "",
           email: contact.email ?? "",
+          birthDay: String(contact.birthDay ?? ""),
+          birthMonth: String(contact.birthMonth ?? ""),
+          birthYear: String(contact.birthYear ?? ""),
         }}
         submitLabel="Сохранить изменения"
         cancelHref={`/contacts/${contact.id}`}

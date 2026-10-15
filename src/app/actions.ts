@@ -63,8 +63,17 @@ export type SaveResult = {
 /** On success: what undo needs, as ISO strings. */
 export type MarkContactedResult = { previous: string | null; marked: string } | { error: string };
 
-const contactFields: ContactField[] = ["name", "about", "howWeMet", "phone", "email", "firstNote"];
-const contactUpdateFields: ContactField[] = ["name", "about", "howWeMet", "phone", "email"];
+const contactUpdateFields: ContactField[] = [
+  "name",
+  "about",
+  "howWeMet",
+  "phone",
+  "email",
+  "birthDay",
+  "birthMonth",
+  "birthYear",
+];
+const contactFields: ContactField[] = [...contactUpdateFields, "firstNote"];
 
 const isValidId = (id: number) => Number.isSafeInteger(id) && id > 0;
 

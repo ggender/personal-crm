@@ -7,7 +7,9 @@ import type { ContactFormState } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { MONTHS_GENITIVE } from "@/lib/format";
 import type { ContactField } from "@/lib/validation";
 
 type FieldProps = {
@@ -50,6 +52,88 @@ function Field({ name, label, hint, state, children }: FieldProps) {
         )
       )}
     </div>
+  );
+}
+
+const DAYS = Array.from({ length: 31 }, (_, index) => String(index + 1));
+
+/*
+ * The date of birth: the day and the month are chosen from lists, the year is typed. The three sit in
+ * one row, also on a phone, with one message under them. The list of days does not depend on the
+ * chosen month: the server refuses a day that the month does not have ("Такой даты нет").
+ */
+function BirthDateField({ state }: { state: ContactFormState }) {
+  const error = state.errors?.birthDate;
+  const shared = {
+    "aria-invalid": error ? true : undefined,
+    "aria-describedby": error ? "contact-birthDate-error" : undefined,
+  };
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="mb-2 text-14 leading-none font-medium text-muted">Дата рождения</legend>
+      <div className="grid grid-cols-[6rem_minmax(0,1fr)_5.5rem] gap-2">
+        <div>
+          <Label htmlFor="contact-birthDay" className="sr-only">
+            День
+          </Label>
+          <NativeSelect
+            // After a refused form React resets a list to its first item; a new key makes it start
+            // again from the value that was sent.
+            key={state.values?.birthDay ?? ""}
+            {...shared}
+            id="contact-birthDay"
+            name="birthDay"
+            defaultValue={state.values?.birthDay ?? ""}
+          >
+            <NativeSelectOption value="">День</NativeSelectOption>
+            {DAYS.map((day) => (
+              <NativeSelectOption key={day} value={day}>
+                {day}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
+        <div>
+          <Label htmlFor="contact-birthMonth" className="sr-only">
+            Месяц
+          </Label>
+          <NativeSelect
+            key={state.values?.birthMonth ?? ""}
+            {...shared}
+            id="contact-birthMonth"
+            name="birthMonth"
+            defaultValue={state.values?.birthMonth ?? ""}
+          >
+            <NativeSelectOption value="">Месяц</NativeSelectOption>
+            {MONTHS_GENITIVE.map((month, index) => (
+              <NativeSelectOption key={month} value={String(index + 1)}>
+                {month}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
+        <div>
+          <Label htmlFor="contact-birthYear" className="sr-only">
+            Год
+          </Label>
+          <Input
+            {...shared}
+            id="contact-birthYear"
+            name="birthYear"
+            defaultValue={state.values?.birthYear ?? ""}
+            inputMode="numeric"
+            maxLength={4}
+            autoComplete="off"
+            placeholder="Год"
+          />
+        </div>
+      </div>
+      {error && (
+        <p id="contact-birthDate-error" className="text-14 text-destructive">
+          {error}
+        </p>
+      )}
+    </fieldset>
   );
 }
 
@@ -123,6 +207,7 @@ export function ContactForm({
           )}
         </Field>
       </div>
+      <BirthDateField state={state} />
       {withFirstNote && (
         <Field
           name="firstNote"

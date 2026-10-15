@@ -27,6 +27,7 @@ import {
   listContacts,
   listNotes,
   listOverdueContacts,
+  listUpcomingBirthdays,
   markContacted,
   setContactFrequency,
   undoContacted,
@@ -54,7 +55,7 @@ import {
   makeUser,
   resetDb,
 } from "./helpers/db";
-import { daysAgo } from "./helpers/days";
+import { addDays, daysAgo, moscowToday } from "./helpers/days";
 import { signInAs } from "./shims/current-user";
 
 /*
@@ -159,6 +160,16 @@ describe("Пользователь видит только своё", () => {
     ]);
 
     expect(await listOverdueContacts(b.id)).toEqual([]);
+  });
+
+  it("Чужие дни рождения не попадают в «Скоро день рождения»", async () => {
+    const [, month, day] = addDays(moscowToday(), 1).split("-").map(Number);
+    await makeContact(a.id, { name: "Вера Кузнецова", birthDay: day, birthMonth: month });
+    expect((await listUpcomingBirthdays(a.id)).map((contact) => contact.name)).toEqual([
+      "Вера Кузнецова",
+    ]);
+
+    expect(await listUpcomingBirthdays(b.id)).toEqual([]);
   });
 
   it("Чужих групп не видно", async () => {
@@ -314,12 +325,19 @@ describe("Новый пользователь начинает с пустого
     await addMember(group, contacts[0].id);
     await setContactFrequency(a.id, contacts[0].id, "weekly");
     await makeNote(contacts[0].id, daysAgo(40));
+    // A birthday tomorrow.
+    const [, month, day] = addDays(moscowToday(), 1).split("-").map(Number);
+    await getDb().execute(
+      sql`update contacts set birth_day = ${day}, birth_month = ${month} where id = ${contacts[1].id}`,
+    );
     expect(await countContacts(a.id, ALL)).toBe(50);
+    expect(await listUpcomingBirthdays(a.id)).toHaveLength(1);
 
     // B signs in for the first time: nothing of A's is there.
     expect(await countContacts(b.id, ALL)).toBe(0);
     expect(await listContacts(b.id, "", ALL)).toEqual([]);
     expect(await listOverdueContacts(b.id)).toEqual([]);
+    expect(await listUpcomingBirthdays(b.id)).toEqual([]);
     expect(await listGroups(b.id)).toEqual([]);
   });
 });
