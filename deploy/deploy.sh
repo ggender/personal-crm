@@ -106,7 +106,7 @@ for _ in $(seq 1 30); do
 done
 if [[ "$body" != *"\"version\":\"$TAG\""* ]]; then
   echo "SMOKE FAILED: $HEALTH_URL did not answer 200 with version $TAG (got: ${body:-no answer})." >&2
-  echo "Deploy failed, nothing was rolled back. Logs: $(pwd)/compose.sh logs --tail 100 app" >&2
+  echo "Deploy failed, nothing was rolled back. Logs: sudo journalctl -t $ENVIRONMENT-app -n 100" >&2
   exit 1
 fi
 echo "$body"

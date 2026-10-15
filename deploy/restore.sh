@@ -108,7 +108,7 @@ fi
 on_error() {
   echo "RESTORE FAILED. The app may be stopped and the database $DB empty or missing." >&2
   if [[ -n "$copy" ]]; then echo "The database as it was before this restore: $copy" >&2; fi
-  echo "Logs: $(pwd)/compose.sh logs --tail 100 app db" >&2
+  echo "Logs: sudo journalctl -t $DEPLOY_ENV-app -t $DEPLOY_ENV-db -n 100" >&2
 }
 trap on_error ERR
 

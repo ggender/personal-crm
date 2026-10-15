@@ -2,11 +2,14 @@
 # Use it only through deploy.sh or compose.sh: they pass the project name (-p prod, -p staging), the
 # address and port of the environment, .env (its secrets) and release.env (its current image tag).
 
+# Logs go to the server journal (journald), not into the container: they outlive a deploy or a
+# rollback that recreates the container, and journald itself caps their size and drops the oldest.
+# Tag <project>-<service> (prod-app, staging-db, prod-migrate...) stays the same for every new
+# container: read with `sudo journalctl -t prod-app` (see README).
 x-logging: &logging
-  driver: json-file
+  driver: journald
   options:
-    max-size: 10m
-    max-file: "3"
+    tag: '{{index .ContainerLabels "com.docker.compose.project"}}-{{index .ContainerLabels "com.docker.compose.service"}}'
 
 x-app-environment: &app-environment
   DATABASE_URL: postgres://crm:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set in .env}@db:5432/crm
