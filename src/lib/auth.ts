@@ -40,7 +40,12 @@ function createAuth() {
       usePlural: true,
       schema: { users, sessions, accounts, verifications },
     }),
-    advanced: { database: { generateId: "uuid" } },
+    advanced: {
+      database: { generateId: "uuid" },
+      // The login cookie stays on the host of this environment (no Domain attribute): a login on
+      // test-app.vprodcrm.ru is not a login on app.vprodcrm.ru, and the other way round.
+      crossSubDomainCookies: { enabled: false },
+    },
     // 30 days from the last visit; a visit renews the login, but not more often than once a day.
     session: { expiresIn: 30 * DAY, updateAge: DAY },
     // The only limit is "3 emails per address in 10 minutes" (src/lib/login-emails.ts): the owner

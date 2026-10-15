@@ -1,5 +1,7 @@
-# Every push to main: build the app image tagged with the commit SHA, push it to GHCR,
-# then deploy it to the server. Deploy logic lives in deploy/; this file only calls it.
+# Every push to main: build the app image tagged with the commit SHA, push it to GHCR, deploy it to
+# staging (https://test-app.vprodcrm.ru), then to prod (https://app.vprodcrm.ru). Prod waits for
+# staging but goes out whatever staging's result: one after the other, so the two deploys never
+# share the server's single CPU. Deploy logic lives in deploy/; this file only calls it.
 name: Deploy
 
 on:
@@ -7,9 +9,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# One deploy at a time; a newer push waits for the running deploy instead of cancelling it.
+# One run at a time, so pushes reach the servers in order; a newer push waits for the running
+# deploy instead of cancelling it.
 concurrency:
-  group: deploy-production
+  group: deploy
   cancel-in-progress: false
 
 jobs:
@@ -44,9 +47,43 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy:
+  deploy-staging:
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # One deploy of an environment at a time, whichever workflow starts it.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    environment:
+      name: staging
+      url: https://test-app.vprodcrm.ru
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Deploy to staging
+        run: deploy/ship.sh
+        env:
+          DEPLOY_ENV: staging
+          APP_IMAGE: ${{ needs.build.outputs.image }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-production:
+    needs: [build, deploy-staging]
+    # Prod does not depend on staging yet: it goes out even when the staging deploy failed.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: read
@@ -56,9 +93,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Deploy to the server
+      - name: Deploy to prod
         run: deploy/ship.sh
         env:
+          DEPLOY_ENV: prod
           APP_IMAGE: ${{ needs.build.outputs.image }}
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}

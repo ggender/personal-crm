@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Dumps the production database into backups/ and prints the path of the new file.
+# Dumps the production database into backups/ and prints the path of the new file. Prod only:
+# staging makes no backups, its data is a copy of a prod backup (see restore.sh).
 # Called by deploy.sh (before migrations) and restore.sh (copy of the database it replaces):
 #   backup.sh <app-version> [label]
 # File name: crm_<server date>_<server time>_<app version>[_<label>].dump, pg_dump custom format.
@@ -10,6 +11,12 @@ VERSION="${1:?usage: backup.sh <app-version> [label]}"
 LABEL="${2:-}"
 
 cd "$(dirname "$0")"
+source ./environments.sh
+load_environment_of_dir "$(pwd)"
+if [[ "$BACKUP" != yes ]]; then
+  echo "No backups in $DEPLOY_ENV: backup.sh runs on prod only." >&2
+  exit 1
+fi
 
 # Backups hold all the data: readable by the deploy user only.
 umask 077
