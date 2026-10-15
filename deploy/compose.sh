@@ -2,7 +2,8 @@
 # docker compose for the environment whose folder this script is in (see environments.sh): the right
 # project name, address, port and env files. Examples on the server (as the deploy user):
 #   /srv/personal-crm/compose.sh ps                               # prod
-#   /srv/personal-crm-staging/compose.sh logs --tail 100 app      # staging
+#   /srv/personal-crm-staging/compose.sh logs --tail 100 app      # staging, current container only
+#   (all the logs, also of removed containers: sudo journalctl -t staging-app, see README)
 set -euo pipefail
 
 cd "$(dirname "$0")"
