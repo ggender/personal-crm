@@ -20,6 +20,7 @@ import { ContactedButton } from "@/components/contacted-button";
 import { NoteForm } from "@/components/note-form";
 import { NoteItem } from "@/components/note-item";
 import { Button } from "@/components/ui/button";
+import { appToday } from "@/lib/birthdays";
 import {
   type ContactTouchStatus,
   getContact,
@@ -27,7 +28,14 @@ import {
   listNotes,
 } from "@/lib/contacts";
 import { requireUser } from "@/lib/current-user";
-import { formatDate, formatDateTime, formatDay, formatOverdue, plural } from "@/lib/format";
+import {
+  formatBirthDate,
+  formatDate,
+  formatDateTime,
+  formatDay,
+  formatOverdue,
+  plural,
+} from "@/lib/format";
 import { getContactGroupIds, listGroups } from "@/lib/groups";
 import { cn } from "@/lib/utils";
 import { parseId } from "@/lib/validation";
@@ -56,6 +64,13 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
   ]);
   if (!contact || !touch) notFound();
 
+  const birthDate = formatBirthDate(
+    contact.birthDay,
+    contact.birthMonth,
+    contact.birthYear,
+    appToday(),
+  );
+
   const details = [
     contact.phone && {
       label: "Телефон",
@@ -81,6 +96,7 @@ export default async function ContactPage({ params }: PageProps<"/contacts/[id]"
         </a>
       ),
     },
+    birthDate && { label: "Дата рождения", value: birthDate },
     contact.howWeMet && { label: "Откуда знакомы", value: contact.howWeMet },
     {
       label: "Группы",

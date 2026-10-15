@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { daysAgo } from "../tests/helpers/days";
+import { addDays, daysAgo, moscowToday } from "../tests/helpers/days";
 import { addContact, signInNewUser } from "./helpers/auth";
 import {
   addMember,
@@ -34,6 +34,11 @@ async function personB(browser: import("@playwright/test").Browser) {
 const list = (page: Page) => page.getByRole("main");
 const contactLink = (page: Page, name: string) => list(page).getByRole("link", { name });
 const overdueBlock = (page: Page) => page.getByRole("region", { name: /Пора связаться/ });
+const birthdayBlock = (page: Page) => page.getByRole("region", { name: /Скоро день рождения/ });
+const tomorrow = () => {
+  const [, month, day] = addDays(moscowToday(), 1).split("-").map(Number);
+  return { day, month, year: 1990 };
+};
 const groupFilter = (page: Page) => page.getByRole("navigation", { name: "Фильтр по группам" });
 
 /** A has a contact with a phone and a note, a group with him in it, and a person long overdue. */
@@ -104,6 +109,23 @@ test.describe("Пользователь видит только своё", () =>
       await b.page.goto("/");
       await expect(contactLink(b.page, "Анна Смирнова")).toBeVisible();
       await expect(overdueBlock(b.page)).toHaveCount(0);
+    } finally {
+      await b.close();
+    }
+  });
+
+  test("Чужие дни рождения не попадают в «Скоро день рождения»", async ({ page, browser }) => {
+    const a = await signInNewUser(page, "anna");
+    await makeContact({ userId: a.userId, name: "Вера Кузнецова", birth: tomorrow() });
+    await page.goto("/");
+    await expect(birthdayBlock(page)).toContainText("Вера Кузнецова");
+
+    const b = await personB(browser);
+    try {
+      await makeContacts(b.userId, ["Анна Смирнова"]);
+      await b.page.goto("/");
+      await expect(contactLink(b.page, "Анна Смирнова")).toBeVisible();
+      await expect(birthdayBlock(b.page)).toHaveCount(0);
     } finally {
       await b.close();
     }
@@ -196,8 +218,10 @@ test.describe("Новый пользователь начинает с пуст�
       createdAt: daysAgo(30),
     });
     await addMember(tennis, first);
+    await makeContact({ userId: a.userId, name: "Именинник", birth: tomorrow() });
     await page.goto("/");
-    await expect(page.getByText("51 контакт", { exact: true })).toBeVisible();
+    await expect(page.getByText("52 контакта", { exact: true })).toBeVisible();
+    await expect(birthdayBlock(page)).toContainText("Именинник");
 
     const b = await personB(browser);
     try {
@@ -206,6 +230,7 @@ test.describe("Новый пользователь начинает с пуст�
       await expect(b.page.getByText("Пока нет ни одного контакта")).toBeVisible();
       await expect(b.page.getByRole("link", { name: "Добавить первый контакт" })).toBeVisible();
       await expect(overdueBlock(b.page)).toHaveCount(0);
+      await expect(birthdayBlock(b.page)).toHaveCount(0);
       await expect(groupFilter(b.page)).toHaveCount(0);
     } finally {
       await b.close();

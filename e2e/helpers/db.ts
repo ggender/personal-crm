@@ -53,15 +53,19 @@ export async function makeContact({
   name,
   frequency = null,
   createdAt = new Date(),
+  birth = null,
 }: {
   userId: string;
   name: string;
   frequency?: "weekly" | "monthly" | "quarterly" | "yearly" | null;
   createdAt?: Date;
+  /** The date of birth; the year may be unknown. */
+  birth?: { day: number; month: number; year?: number } | null;
 }) {
   const [{ id }] = await sql()<{ id: number }[]>`
-    insert into contacts (name, contact_frequency, created_at, user_id)
-    values (${name}, ${frequency}, ${createdAt}, ${userId})
+    insert into contacts (name, contact_frequency, created_at, user_id, birth_day, birth_month, birth_year)
+    values (${name}, ${frequency}, ${createdAt}, ${userId},
+      ${birth?.day ?? null}, ${birth?.month ?? null}, ${birth?.year ?? null})
     returning id
   `;
   return id;

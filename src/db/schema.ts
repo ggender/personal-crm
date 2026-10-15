@@ -6,6 +6,7 @@ import {
   integer,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -136,6 +137,11 @@ export const contacts = pgTable(
     howWeMet: text("how_we_met"),
     phone: text(),
     email: text(),
+    // Date of birth in three parts, so that a year can be unknown. Day and month are set together;
+    // the year is optional. NULL in all three means no date.
+    birthDay: smallint("birth_day"),
+    birthMonth: smallint("birth_month"),
+    birthYear: smallint("birth_year"),
     // How often to keep in touch; NULL means "Не задано"
     contactFrequency: text("contact_frequency", { enum: CONTACT_FREQUENCIES }),
     // Last time "Пообщались" was pressed; NULL means never
@@ -149,6 +155,18 @@ export const contacts = pgTable(
       "contacts_contact_frequency_check",
       sql`${t.contactFrequency} in (${sql.raw(CONTACT_FREQUENCIES.map((value) => `'${value}'`).join(", "))})`,
     ),
+    // A safety net for requests that bypass the form. The rules that depend on today's date (29
+    // February in a common year, a year in the future) are checked by the app, not here.
+    check(
+      "contacts_birth_date_check",
+      sql`(${t.birthDay} is null and ${t.birthMonth} is null and ${t.birthYear} is null) or (${t.birthDay} is not null and ${t.birthMonth} is not null)`,
+    ),
+    check("contacts_birth_month_check", sql`${t.birthMonth} between 1 and 12`),
+    check(
+      "contacts_birth_day_check",
+      sql`${t.birthDay} between 1 and case when ${t.birthMonth} = 2 then 29 when ${t.birthMonth} in (4, 6, 9, 11) then 30 else 31 end`,
+    ),
+    check("contacts_birth_year_check", sql`${t.birthYear} >= 1900`),
   ],
 );
 

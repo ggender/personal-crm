@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { appToday, birthDateError, parseBirthDay, parseBirthYear } from "@/lib/birthdays";
 import { CONTACT_FREQUENCIES } from "@/lib/keep-in-touch";
 
 // Empty optional fields are stored as NULL rather than as empty strings.
@@ -10,7 +11,13 @@ const optionalText = (max: number) =>
     .max(max, `Не длиннее ${max} символов`)
     .transform((value) => value || null);
 
-export const contactInputSchema = z.object({
+// The date of birth comes as three texts, "" for not chosen. Each becomes a number or null; a text
+// that is not a number stays NaN and is refused by the check of the whole date below. Missing in the
+// data is the same as empty, so callers that know nothing about birthdays keep working.
+const birthDayPart = z.string().trim().default("").transform(parseBirthDay);
+const birthYearPart = z.string().trim().default("").transform(parseBirthYear);
+
+const contactFieldsSchema = z.object({
   name: z.string().trim().min(1, "Укажите имя").max(200, "Не длиннее 200 символов"),
   about: optionalText(500),
   howWeMet: optionalText(1000),
@@ -29,14 +36,45 @@ export const contactInputSchema = z.object({
     .max(200, "Не длиннее 200 символов")
     .refine((value) => value === "" || z.email().safeParse(value).success, "Проверьте адрес почты")
     .transform((value) => value || null),
+  birthDay: birthDayPart,
+  birthMonth: birthDayPart,
+  birthYear: birthYearPart,
   firstNote: optionalText(5000),
 });
 
+/*
+ * The date of birth is checked as a whole, after its parts: one message for the three of them, under
+ * the key "birthDate". Added to each schema separately: zod cannot safely `omit` from a checked one.
+ */
+function checkBirthDate(
+  data: { birthDay: number | null; birthMonth: number | null; birthYear: number | null },
+  ctx: z.RefinementCtx,
+) {
+  const message = birthDateError(data.birthDay, data.birthMonth, data.birthYear, appToday());
+  if (message) ctx.addIssue({ code: "custom", path: ["birthDate"], message });
+}
+
+export const contactInputSchema = contactFieldsSchema.superRefine(checkBirthDate);
+
 export type ContactInput = z.infer<typeof contactInputSchema>;
-export type ContactField = keyof ContactInput;
+
+/** The fields of the contact form; "birthDate" is the one error shown under the three date parts. */
+export type ContactField =
+  | "name"
+  | "about"
+  | "howWeMet"
+  | "phone"
+  | "email"
+  | "birthDay"
+  | "birthMonth"
+  | "birthYear"
+  | "birthDate"
+  | "firstNote";
 
 // Editing changes the contact's own fields; notes are edited separately.
-export const contactUpdateSchema = contactInputSchema.omit({ firstNote: true });
+export const contactUpdateSchema = contactFieldsSchema
+  .omit({ firstNote: true })
+  .superRefine(checkBirthDate);
 
 export type ContactUpdate = z.infer<typeof contactUpdateSchema>;
 

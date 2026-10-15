@@ -36,6 +36,13 @@
       "when": 1791993794735,
       "tag": "0004_data_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792096997753,
+      "tag": "0005_birthdays",
+      "breakpoints": true
     }
   ]
 }

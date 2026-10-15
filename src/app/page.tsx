@@ -1,6 +1,7 @@
 import { CircleCheck, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 
+import { BirthdaysSection } from "@/components/birthdays-section";
 import { ContactListLink } from "@/components/contact-list-link";
 import { ContactSearch } from "@/components/contact-search";
 import { CtaLink } from "@/components/cta-link";
@@ -8,7 +9,12 @@ import { GroupFilter } from "@/components/group-filter";
 import { GroupLabels } from "@/components/group-labels";
 import { KeepInTouchSection } from "@/components/keep-in-touch-section";
 import { ScrollIntoView } from "@/components/scroll-into-view";
-import { countContacts, listContacts, listOverdueContacts } from "@/lib/contacts";
+import {
+  countContacts,
+  listContacts,
+  listOverdueContacts,
+  listUpcomingBirthdays,
+} from "@/lib/contacts";
 import { plural } from "@/lib/format";
 import { requireUser } from "@/lib/current-user";
 import { listGroups } from "@/lib/groups";
@@ -46,11 +52,12 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
   const groups = await listGroups(user.id);
   const filter = resolveGroupFilter(group, groups);
 
-  // The "Пора связаться" block is hidden while searching, so it is not even queried then.
-  // It ignores the group filter: everyone overdue is in it.
-  const [items, total, overdue] = await Promise.all([
+  // The blocks "Скоро день рождения" and "Пора связаться" are hidden while searching, so they are
+  // not even queried then. They ignore the group filter: everyone who fits is in them.
+  const [items, total, birthdays, overdue] = await Promise.all([
     listContacts(user.id, query, filter),
     countContacts(user.id, filter),
+    query ? [] : listUpcomingBirthdays(user.id),
     query ? [] : listOverdueContacts(user.id),
   ]);
   const addedContact = addedId ? items.find((item) => item.id === addedId) : undefined;
@@ -94,6 +101,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/">) {
         )}
       </header>
 
+      {birthdays.length > 0 && <BirthdaysSection contacts={birthdays} />}
       {overdue.length > 0 && <KeepInTouchSection contacts={overdue} />}
 
       {items.length === 0 ? (
