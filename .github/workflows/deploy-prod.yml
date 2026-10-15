@@ -1,0 +1,79 @@
+# Deploy to prod (https://app.vprodcrm.ru), started only by hand: Actions -> Deploy prod -> Run
+# workflow. It deploys only a commit whose deploy to staging was green, and with it the deploy/
+# scripts of that same commit: the pair staging has run. With "rollback" it deploys the version prod
+# ran before the current one, as the server remembers it, without the staging check. The run summary
+# shows which commit went out. Deploy logic lives in deploy/; this file only calls it.
+name: Deploy prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit to deploy. Empty: the commit of the last green deploy to staging. Only a commit that passed staging."
+        required: false
+        type: string
+        default: ""
+      rollback:
+        description: "Roll back to the version prod ran before the current one (the commit field is ignored)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    # One deploy of prod at a time; a second run waits for the first.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      deployments: read
+      packages: write
+    environment:
+      name: production
+      url: https://app.vprodcrm.ru
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Choose the version
+        id: version
+        run: deploy/prod-version.sh
+        env:
+          REQUESTED_SHA: ${{ inputs.sha }}
+          ROLLBACK: ${{ inputs.rollback }}
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Check out the deploy scripts of that version
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.version.outputs.sha }}
+          path: release
+
+      - name: Deploy to prod
+        id: ship
+        run: release/deploy/ship.sh
+        env:
+          DEPLOY_ENV: prod
+          APP_IMAGE: ${{ steps.version.outputs.image }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
+
+      - name: Summary
+        if: ${{ always() && steps.version.outputs.sha != '' }}
+        run: deploy/prod-summary.sh
+        env:
+          SHA: ${{ steps.version.outputs.sha }}
+          NOTE: ${{ steps.version.outputs.note }}
+          OUTCOME: ${{ steps.ship.outcome }}
+
+      - name: Remove old images from GHCR
+        run: deploy/ghcr-cleanup.sh
+        env:
+          GH_TOKEN: ${{ github.token }}

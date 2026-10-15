@@ -118,7 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
-      # Only checks that the image builds; deploy.yml builds and pushes it after the merge.
+      # Only checks that the image builds; deploy-staging.yml builds and pushes it after the merge.
       - uses: docker/build-push-action@v7
         with:
           context: .
