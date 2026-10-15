@@ -26,6 +26,8 @@ const literata = Literata({
 export const metadata: Metadata = {
   title: { default: "Контакты", template: "%s · Контакты" },
   description: "Личная CRM: люди, которых я знаю, и контекст общения с ними",
+  // A plain file from public/: as app/icon.svg Next.js served it with its own x-nextjs-cache header.
+  icons: { icon: { url: "/icon.svg", type: "image/svg+xml" } },
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
