@@ -47,10 +47,11 @@ if [[ -z "$FILE" ]]; then
   fi
 fi
 
-# Same lock as deploy.sh: no restore while a deploy of this environment runs, and the other way round.
+# Same lock as deploy.sh and daily-backup.sh: no restore while a deploy or the daily backup of this
+# environment runs, and the other way round.
 exec 9> deploy.lock
 if ! flock -n 9; then
-  echo "A deploy or restore of $DEPLOY_ENV is running now. Try again when it ends. Nothing was changed." >&2
+  echo "A deploy, restore or backup of $DEPLOY_ENV is running now. Try again when it ends. Nothing was changed." >&2
   exit 1
 fi
 

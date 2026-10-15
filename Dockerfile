@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Production image of the app. Built by CI (.github/workflows/deploy.yml) and pushed to GHCR.
+# Production image of the app. Built by CI (.github/workflows/deploy-staging.yml) and pushed to GHCR.
 # The same image runs the Next.js server (default command) and the one-off migration
 # container (`node scripts/migrate.ts`, see deploy/compose.yaml).
 

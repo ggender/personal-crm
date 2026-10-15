@@ -2,12 +2,14 @@
 # Deploys one image of the app to one environment of this server (prod or staging, see
 # environments.sh). The same script for both; it runs from the folder of that environment:
 # [prod only: database backup] -> pull -> migrations -> new app container -> smoke /health.
-# After a green smoke on prod only the images still needed and the newest backups are kept.
+# After a green smoke on prod the images of the app older than IMAGE_MAX_AGE_DAYS are removed, except
+# the ones still needed. Backup retention is in backup.sh.
 # Two deploys of one environment never run at the same time: the second waits for the first.
 #
 # Called by CI through deploy/ship.sh, which pipes a short-lived GHCR token on stdin:
 #   deploy.sh <environment> <image:tag> <registry-user>
-# Manual rollback of prod to the previous image, which is still on the server (no token needed):
+# Prod is rolled back by Deploy prod with "rollback" (deploy-prod.yml). If GitHub is not available,
+# by hand on the server: the previous image is still there, no token needed:
 #   /srv/personal-crm/deploy.sh prod <image:previous-tag>
 #
 # There is no automatic rollback: any failed step stops the script with a non-zero exit code.
@@ -18,8 +20,8 @@ IMAGE="${2:?usage: deploy.sh <environment> <image:tag> [registry-user]}"
 REGISTRY_USER="${3:-}"
 TAG="${IMAGE##*:}"
 REPO="${IMAGE%:*}"
-KEEP_BACKUPS=10
-# How long a deploy waits for another deploy or restore of the same environment to finish.
+IMAGE_MAX_AGE_DAYS=14
+# How long a deploy waits for another deploy, restore or backup of the same environment to finish.
 LOCK_WAIT_SECONDS=600
 
 cd "$(dirname "$0")"
@@ -40,11 +42,12 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
-# One deploy or restore of an environment at a time, whoever starts it (CI or a person by hand).
+# One deploy, restore or daily backup of an environment at a time, whoever starts it (CI, a person
+# by hand or the backup timer).
 # Taken before release.env is read: the deploy that waited sees what the previous one left there.
 exec 9> deploy.lock
 if ! flock -w "$LOCK_WAIT_SECONDS" 9; then
-  echo "Another deploy or restore of $ENVIRONMENT is still running after ${LOCK_WAIT_SECONDS}s. Nothing was changed." >&2
+  echo "Another deploy, restore or backup of $ENVIRONMENT is still running after ${LOCK_WAIT_SECONDS}s. Nothing was changed." >&2
   exit 1
 fi
 
@@ -108,26 +111,23 @@ if [[ "$body" != *"\"version\":\"$TAG\""* ]]; then
 fi
 echo "$body"
 
-# Images are cleaned up after a deploy to prod only: prod's rollback needs its previous image, and
-# staging may run a newer image than prod, so its current image stays too.
+# Images are cleaned up after a deploy to prod only. Removed: images of the app built more than
+# IMAGE_MAX_AGE_DAYS ago, except prod's current and previous (the rollback needs it) and staging's
+# current (staging may run a newer image than prod).
 if [[ "$ENVIRONMENT" == prod ]]; then
   staging_dir="$(load_environment staging && echo "$APP_DIR")"
   staging_image="$(release_value APP_IMAGE "$staging_dir/release.env")"
-  step "Removing old images (keeping prod current and previous, staging current)"
+  cutoff="$(date -d "-$IMAGE_MAX_AGE_DAYS days" +%s)"
+  step "Removing images older than $IMAGE_MAX_AGE_DAYS days (keeping prod current and previous, staging current)"
   docker image ls "$REPO" --format '{{.Repository}}:{{.Tag}}' | while read -r ref; do
     [[ "$ref" == "$IMAGE" || "$ref" == "$previous" || "$ref" == "$staging_image" ||
       "$ref" == *:"<none>" ]] && continue
-    docker image rm "$ref" >/dev/null && echo "removed $ref" || echo "could not remove $ref" >&2
+    # An image whose build date cannot be read stays.
+    created="$(docker image inspect --format '{{.Created}}' "$ref" 2>/dev/null)" || continue
+    built="$(date -d "$created" +%s 2>/dev/null)" || continue
+    ((built < cutoff)) || continue
+    docker image rm "$ref" >/dev/null && echo "removed $ref (built $created)" || echo "could not remove $ref" >&2
   done
-fi
-
-if [[ "$BACKUP" == yes ]]; then
-  step "Removing old backups (keeping the newest $KEEP_BACKUPS)"
-  # Names start with the date and time, so the name order is the age order.
-  find backups -maxdepth 1 -name 'crm_*.dump' | sort -r | tail -n +$((KEEP_BACKUPS + 1)) |
-    while read -r old; do
-      rm -f -- "$old" && echo "removed $old"
-    done
 fi
 
 step "Deployed $IMAGE to $ENVIRONMENT"
