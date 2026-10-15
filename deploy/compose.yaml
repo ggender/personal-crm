@@ -1,5 +1,6 @@
-# Production stack on the server (/srv/personal-crm). Use it only through deploy.sh or compose.sh:
-# they pass the project name (-p prod), .env (secrets) and release.env (current image tag).
+# The app stack on the server, one file for every environment (prod, staging; see environments.sh).
+# Use it only through deploy.sh or compose.sh: they pass the project name (-p prod, -p staging), the
+# address and port of the environment, .env (its secrets) and release.env (its current image tag).
 
 x-logging: &logging
   driver: json-file
@@ -16,6 +17,8 @@ x-app: &app
   depends_on:
     db:
       condition: service_healthy
+  # Prod and staging share a small server: no container may take the memory of the others.
+  mem_limit: 512m
   logging: *logging
 
 services:
@@ -36,6 +39,7 @@ services:
       retries: 5
       start_period: 30s
       start_interval: 1s
+    mem_limit: 256m
     logging: *logging
 
   # One-off container: applies migrations and exits. deploy.sh runs it before starting a new image.
@@ -46,23 +50,24 @@ services:
       <<: *app-environment
       OWNER_EMAIL: ${OWNER_EMAIL:?OWNER_EMAIL is not set in .env}
     command: ["node", "scripts/migrate.ts"]
+    mem_limit: 256m
     restart: "no"
     profiles: [migrate]
 
   # Login: the secret that signs the cookies and the mail server are in .env (secrets); the public
-  # address of the app (login links point to it) and the sender are not secret.
+  # address of the environment (login links point to it) and the sender are not secret.
   app:
     <<: *app
     environment:
       <<: *app-environment
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is not set in .env}
-      BETTER_AUTH_URL: https://app.vprodcrm.ru
+      BETTER_AUTH_URL: ${PUBLIC_URL:?PUBLIC_URL is not set - run through deploy.sh or compose.sh}
       SMTP_URL: ${SMTP_URL:?SMTP_URL is not set in .env}
       MAIL_FROM: "Личная CRM <noreply@mail.crm.vprodcrm.ru>"
     restart: unless-stopped
     ports:
       # Localhost only: the app is reached from outside through nginx on this server.
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${APP_PORT:?APP_PORT is not set - run through deploy.sh or compose.sh}:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
       interval: 30s
